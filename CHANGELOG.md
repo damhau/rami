@@ -1,3 +1,9 @@
+## v0.6.1 (2026-07-05)
+
+### Fix
+
+- randomize the opening dealer so the same seat doesn't always start
+
 ## v0.6.0 (2026-07-05)
 
 ### Feat

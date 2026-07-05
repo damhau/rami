@@ -1,3 +1,9 @@
+## v0.5.1 (2026-07-05)
+
+### Fix
+
+- name melds by length (brelan/carré) instead of always "brelan"
+
 ## v0.5.0 (2026-07-05)
 
 ### Feat

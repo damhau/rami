@@ -10,3 +10,15 @@ rami-74c9856f86-wswwf rami {"ts": "2026-07-05 12:39:55,798", "level": "ERROR", "
 - [x] I picked up the card from the other player defausse and now I'm stuck with "Vous avez pris une carte de la défausse — vous devez l'utiliser dans une combinaison avant de défausser."
 - [ ] Some of the message are still in english, might miss some translation
 - [X] the help modal is hidden behind the mat and should be with a kind of header and better positionned
+- [ ] when the card a shown on the felt when there is 4 identic card it is still called a brelan "Ordinateur 3 · brelan · 44 pts"
+- [ ] in the score card what is the purpose of main vs total
+
+Scores
+manche 1/11
+Joueur	Main	Total
+Damien	13	0
+Ordinateur 1▣ sorti	7	0
+Ordinateur 2	13	0
+Ordinateur 3▣ sorti	5	0
+Le score le plus bas après la manche 11 gagne.
+

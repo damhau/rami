@@ -9,9 +9,27 @@ function codeFromUrl(): string {
   return (new URLSearchParams(location.search).get("t") ?? "").replace(/\D/g, "").slice(0, 4);
 }
 
+const NAME_KEY = "rami.name";
+
+function loadName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveName(name: string): void {
+  try {
+    localStorage.setItem(NAME_KEY, name);
+  } catch {
+    /* storage unavailable (e.g. private mode) — ignore */
+  }
+}
+
 export function Home() {
   const enter = useStore((s) => s.enter);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(loadName);
   const [code, setCode] = useState(codeFromUrl);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +42,7 @@ export function Home() {
       setError(t.home.needName);
       return;
     }
+    saveName(name.trim()); // remember the name for next time
     setBusy(true);
     try {
       const joined = await action();

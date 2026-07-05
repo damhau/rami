@@ -36,7 +36,7 @@ export function Home() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen min-h-dvh max-w-[1100px] items-center px-4">
+    <div className="mx-auto flex min-h-screen min-h-dvh max-w-[1100px] items-start px-4 pt-6 sm:items-center sm:pt-0">
       <div className="grid w-full gap-8 md:grid-cols-2">
         <div>
           <div className="mb-6 flex items-center gap-2 text-xl font-extrabold tracking-tight">

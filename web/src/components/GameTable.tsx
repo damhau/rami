@@ -139,16 +139,11 @@ export function GameTable({ snap }: { snap: Snapshot }) {
     if (selected.length === 1) send({ type: "discard", card_id: selected[0] });
   };
 
-  const statusText = (() => {
-    if (freeForMe) return t.game.freeForYou;
-    if (snap.free_card) {
-      const who = snap.players.find((p) => p.seat === snap.free_card?.current_seat)?.name ?? "";
-      if (!isMyTurn) return t.game.freeDeciding(who);
-    }
-    if (isMyTurn) return canDraw ? t.game.yourTurnDraw : t.game.yourTurnAct;
-    const turn = snap.players.find((p) => p.seat === snap.turn_seat)?.name ?? "";
-    return t.game.waitingFor(turn);
-  })();
+  // Who is acting right now (the free-card decider, else the turn player).
+  const activeSeat = snap.free_card ? snap.free_card.current_seat : snap.turn_seat;
+  const activeIsMe = activeSeat === me;
+  const activeName = snap.players.find((p) => p.seat === activeSeat)?.name ?? "";
+  const turnLabel = activeIsMe ? t.game.yourTurnShort : activeName;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -158,25 +153,36 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           status pill and free-card prompt pinned near the bottom. */}
       {/* On phones the mat is only as tall as its content (so it doesn't dominate
           the screen); on sm+ it fills the space to read as a full table. */}
-      <div className="felt relative overflow-hidden rounded-3xl px-3 pt-3 pb-14 sm:min-h-full sm:px-4 sm:pt-4 sm:pb-20 md:px-6 md:pt-6">
-        {/* contract banner — one compact line to save vertical space */}
-        <div className="absolute left-1/2 top-2 z-10 max-w-[calc(100%-0.5rem)] -translate-x-1/2">
-          <div className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-gold/30 bg-ink/70 px-3 py-1 backdrop-blur">
-            <span className="rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-gold sm:text-[11px]">
+      <div className="felt relative overflow-hidden rounded-3xl px-3 pt-3 pb-4 sm:min-h-full sm:px-4 sm:pt-4 sm:pb-6 md:px-6 md:pt-6">
+        {/* top bar: whose turn (left) + contract (right) */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5 rounded-full border border-white/10 bg-ink/60 px-2.5 py-1 text-[11px] backdrop-blur sm:text-xs">
+            <span
+              className={cn(
+                "h-1.5 w-1.5 shrink-0 rounded-full",
+                activeIsMe ? "animate-pulse bg-gold" : "bg-slate-400",
+              )}
+            />
+            <span className={cn("truncate", activeIsMe ? "font-semibold text-gold" : "text-slate-200")}>
+              {turnLabel}
+            </span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2 rounded-full border border-gold/30 bg-ink/60 px-3 py-1 backdrop-blur">
+            <span className="shrink-0 rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-gold sm:text-[11px]">
               {t.game.round(snap.round_no)}
             </span>
-            <span className="text-[11px] font-semibold sm:text-sm">
+            <span className="truncate text-[11px] font-semibold sm:text-sm">
               {snap.contract ? contractLabel(snap.contract.requirements) : "—"}
             </span>
-            <span className="h-3 w-px bg-white/15" />
-            <span className="text-[10px] text-slate-300 sm:text-[11px]">
+            <span className="hidden h-3 w-px shrink-0 bg-white/15 sm:block" />
+            <span className="hidden shrink-0 text-[10px] text-slate-300 sm:inline sm:text-[11px]">
               ≥ <b className="text-white">{snap.go_out_min_points} pts</b>
             </span>
           </div>
         </div>
 
         {/* opponents */}
-        <div className="mt-9 flex flex-wrap items-start justify-center gap-3 sm:mt-12 sm:gap-4 md:mt-14 md:gap-8">
+        <div className="mt-3 flex flex-wrap items-start justify-center gap-3 sm:mt-5 sm:gap-4 md:mt-6 md:gap-8">
           {opponents.map((p) => (
             <div key={p.seat} className="flex flex-col items-center">
               <div
@@ -338,17 +344,6 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </div>
         )}
 
-        {/* status hint — smaller on phones */}
-        <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[calc(100%-1rem)] -translate-x-1/2">
-          <div
-            className={cn(
-              "truncate rounded-full border border-white/10 bg-ink/85 px-3 py-1 text-[11px] shadow-xl sm:px-4 sm:py-1.5 sm:text-sm",
-              isMyTurn ? "text-gold" : "text-slate-200",
-            )}
-          >
-            {statusText}
-          </div>
-        </div>
       </div>
       </div>
 

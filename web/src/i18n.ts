@@ -90,6 +90,7 @@ export const t = {
     pass: "Passer",
     freeForYou: "Une carte gratuite vous est proposée.",
     freeDeciding: (who: string) => `${who} décide pour la carte gratuite…`,
+    yourTurnShort: "À vous",
     yourTurnDraw: "À vous — piochez une carte.",
     yourTurnAct: "À vous — combinez et défaussez.",
     waitingFor: (who: string) => `En attente de ${who}…`,

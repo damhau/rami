@@ -156,7 +156,9 @@ export function GameTable({ snap }: { snap: Snapshot }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
       {/* pb-20 keeps the felt's flowing content (melds) clear of the absolute
           status pill and free-card prompt pinned near the bottom. */}
-      <div className="felt relative min-h-full overflow-hidden rounded-3xl px-3 pt-3 pb-14 sm:px-4 sm:pt-4 sm:pb-20 md:px-6 md:pt-6">
+      {/* On phones the mat is only as tall as its content (so it doesn't dominate
+          the screen); on sm+ it fills the space to read as a full table. */}
+      <div className="felt relative overflow-hidden rounded-3xl px-3 pt-3 pb-14 sm:min-h-full sm:px-4 sm:pt-4 sm:pb-20 md:px-6 md:pt-6">
         {/* contract banner — one compact line to save vertical space */}
         <div className="absolute left-1/2 top-2 z-10 max-w-[calc(100%-0.5rem)] -translate-x-1/2">
           <div className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-gold/30 bg-ink/70 px-3 py-1 backdrop-blur">

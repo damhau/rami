@@ -1,3 +1,9 @@
+## v0.4.1 (2026-07-05)
+
+### Fix
+
+- wrap the hand to multiple rows on mobile
+
 ## v0.4.0 (2026-07-05)
 
 ### Feat

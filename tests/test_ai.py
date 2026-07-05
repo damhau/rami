@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from conftest import C, D, H, S, card, joker, two_player_state
+from conftest import C, D, H, S, card, joker, three_player_state, two_player_state
 from rami.game.ai import _meld_points, next_bot_intent
 from rami.game.engine import apply, new_game, start_round
-from rami.game.intents import Discard, DrawStock, LayMelds
+from rami.game.intents import ClaimFreeCard, Discard, DrawDiscard, DrawStock, LayMelds
 from rami.game.melds import MeldKind, arrange_run, cards_points
-from rami.game.state import Phase
+from rami.game.state import FreeCardOffer, Phase
 
 
 def _no_meld_filler(n: int) -> list:
@@ -50,6 +50,40 @@ def test_bot_discards_when_it_cannot_go_out():
     g = two_player_state(_no_meld_filler(9), _no_meld_filler(9), round_no=1)  # await_discard
     intent = next_bot_intent(g, 0)
     assert isinstance(intent, Discard)
+
+
+def test_bot_keeps_a_pair_and_discards_the_isolated_high_card():
+    # 7♠ 7♥ is a pair (worth keeping toward a set); K♦ is isolated dead weight.
+    hand = [card(S, 7, 1), card(H, 7, 2), card(D, 13, 3), card(C, 2, 4), card(D, 4, 5)]
+    g = two_player_state(hand, _no_meld_filler(5), round_no=1)  # await_discard
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, Discard)
+    assert intent.card_id == 3  # the K♦, not one of the paired 7s
+
+
+def test_bot_takes_the_discard_to_go_out():
+    # A♠ A♥ + 5-6-7♣; the A♦ on the discard completes A-A-A (33) + run (18) = 51.
+    hand = [card(S, 1, 1), card(H, 1, 2), card(C, 5, 3), card(C, 6, 4), card(C, 7, 5)]
+    g = two_player_state(hand, _no_meld_filler(5), round_no=1, phase=Phase.AWAIT_DRAW, turn=0)
+    g.discard = [card(D, 1, 50)]  # A♦ face-up
+    g.stock = [card(S, 2, 99)]
+    assert next_bot_intent(g, 0) == DrawDiscard(0)
+
+
+def test_bot_passes_a_useless_discard():
+    hand = [card(S, 7, 1), card(H, 2, 2), card(C, 9, 3), card(D, 4, 4), card(S, 11, 5)]
+    g = two_player_state(hand, _no_meld_filler(5), round_no=1, phase=Phase.AWAIT_DRAW, turn=0)
+    g.discard = [card(D, 8, 50)]  # doesn't help
+    g.stock = [card(S, 2, 99)]
+    assert next_bot_intent(g, 0) == DrawStock(0)
+
+
+def test_bot_claims_a_free_card_that_completes_a_meld():
+    hands = [_no_meld_filler(5), [card(S, 7, 1), card(H, 7, 2)], _no_meld_filler(5)]
+    g = three_player_state(hands, round_no=1, turn=0, phase=Phase.AWAIT_DISCARD)
+    g.discard = [card(D, 7, 50)]  # 7♦ completes 7♠ 7♥ 7♦
+    g.free_card = FreeCardOffer(pending_seats=[1], resume_seat=0)
+    assert next_bot_intent(g, 1) == ClaimFreeCard(1)
 
 
 def test_bot_scores_runs_like_the_engine():

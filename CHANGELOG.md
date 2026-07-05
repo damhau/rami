@@ -1,3 +1,9 @@
+## v0.3.3 (2026-07-05)
+
+### Fix
+
+- shrink the felt to its content on mobile
+
 ## v0.3.2 (2026-07-05)
 
 ### Fix

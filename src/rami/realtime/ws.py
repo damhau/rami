@@ -30,7 +30,16 @@ connections = ConnectionManager()
 
 # Pause between bot moves so a human can follow the play unfold.
 BOT_MOVE_DELAY_S = 0.7
+# Auto-play a seat that doesn't act in time. A disconnected player is covered
+# quickly so the table isn't stalled; a connected-but-idle player gets a long
+# grace period before the bot plays their turn.
+TURN_TIMEOUT_S = 150.0
+DISCONNECT_TIMEOUT_S = 25.0
+AUTOPLAY_STEP_S = 0.5
 _TURN_PHASES = {Phase.AWAIT_DRAW, Phase.AWAIT_DISCARD}
+
+# One pending idle timer per table (cancelled/replaced on every state change).
+_idle_tasks: dict[str, asyncio.Task[None]] = {}
 
 
 def _manager(ws: WebSocket) -> TableManager:
@@ -104,6 +113,81 @@ async def _run_bots(session: GameSession) -> None:
         await asyncio.sleep(BOT_MOVE_DELAY_S)
 
 
+# --------------------------------------------------------------------------- #
+# Turn timeout / abandonment: auto-play a human seat that doesn't act in time
+# --------------------------------------------------------------------------- #
+
+
+def _waiting_human_seat(session: GameSession) -> int | None:
+    """The human seat the game is waiting on to take its turn, or None."""
+    state = session.state
+    if state is None or state.phase not in _TURN_PHASES:
+        return None
+    ts = state.turn_seat
+    if ts < len(session.seats) and not session.seats[ts].is_bot:
+        return ts
+    return None
+
+
+def _seat_should_act(session: GameSession, seat: int) -> bool:
+    state = session.state
+    return state is not None and state.phase in _TURN_PHASES and state.turn_seat == seat
+
+
+async def _auto_play_seat(session: GameSession, seat: int) -> None:
+    """Play the bot policy on behalf of an idle/absent seat until its turn ends."""
+    while True:
+        async with session.lock:
+            state = session.state
+            if state is None or not _seat_should_act(session, seat):
+                return
+            intent = ai.next_bot_intent(state, seat)
+            if intent is None:
+                return
+            try:
+                events = session.apply(intent)
+            except AppError:
+                logger.exception("autoplay.failed", extra={"code": session.code, "seat": seat})
+                return
+        await _broadcast(session, events)
+        await asyncio.sleep(AUTOPLAY_STEP_S)
+
+
+async def _idle_timeout(session: GameSession, seat: int, nonce: int, delay: float) -> None:
+    try:
+        await asyncio.sleep(delay)
+    except asyncio.CancelledError:
+        return
+    async with session.lock:
+        if session.decision_nonce != nonce or not _seat_should_act(session, seat):
+            return
+    logger.info("turn.autoplay", extra={"code": session.code, "seat": seat})
+    await _auto_play_seat(session, seat)
+    await _advance(session)
+
+
+def _schedule_idle(session: GameSession) -> None:
+    prev = _idle_tasks.pop(session.code, None)
+    if prev is not None:
+        prev.cancel()
+    seat = _waiting_human_seat(session)
+    if seat is None:
+        return
+    delay = TURN_TIMEOUT_S if session.seats[seat].connected else DISCONNECT_TIMEOUT_S
+    task = asyncio.create_task(_idle_timeout(session, seat, session.decision_nonce, delay))
+    _idle_tasks[session.code] = task
+    task.add_done_callback(
+        lambda t: _idle_tasks.pop(session.code, None) if _idle_tasks.get(session.code) is t else None
+    )
+
+
+async def _advance(session: GameSession) -> None:
+    """After any change: let the bots act, then arm the idle timer for whoever
+    the table is now waiting on."""
+    await _run_bots(session)
+    _schedule_idle(session)
+
+
 def _process(session: GameSession, seat: int, msg: P.ClientMessage) -> list[Event]:
     """Apply one client message (call under the lock)."""
     if isinstance(msg, P.StartMsg):
@@ -141,8 +225,8 @@ async def table_ws(websocket: WebSocket, code: str, token: str = "") -> None:
     connections.register(session.code, seat.seat, websocket)
     logger.info("ws.connected", extra={"code": session.code, "seat": seat.seat})
     await _broadcast(session, [])
-    # A solo game may already be waiting on the bots (they can act before the human).
-    await _run_bots(session)
+    # Bots may need to act (solo game), and arm the idle timer for a human turn.
+    await _advance(session)
 
     try:
         while True:
@@ -163,10 +247,12 @@ async def table_ws(websocket: WebSocket, code: str, token: str = "") -> None:
                 )
                 continue
             await _broadcast(session, events)
-            await _run_bots(session)
+            await _advance(session)
     except WebSocketDisconnect:
         logger.info("ws.disconnected", extra={"code": session.code, "seat": seat.seat})
     finally:
-        seat.connected = False
-        connections.unregister(session.code, seat.seat, websocket)
-        await _broadcast(session, [])
+        # Only mark disconnected if a newer socket hasn't already claimed the seat.
+        if connections.unregister(session.code, seat.seat, websocket):
+            seat.connected = False
+            await _broadcast(session, [])
+            await _advance(session)  # switch to the shorter disconnected timeout

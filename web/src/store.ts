@@ -39,9 +39,112 @@ interface StoreState {
   dismissError: () => void;
 }
 
+// --------------------------------------------------------------------------- //
+// Session persistence — lets a reconnect survive a reload / app restart.
+// --------------------------------------------------------------------------- //
+
+const SESSION_KEY = "rami.session";
+
+function persist(s: Session): void {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  } catch {
+    /* storage unavailable — ignore */
+  }
+}
+
+function clearPersisted(): void {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    const s = raw ? JSON.parse(raw) : null;
+    if (s && typeof s.code === "string" && typeof s.token === "string" && typeof s.you === "number") {
+      return s as Session;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+// --------------------------------------------------------------------------- //
+// WebSocket with automatic reconnection.
+// --------------------------------------------------------------------------- //
+
 let socket: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let deliberate = false; // true while we are intentionally leaving
+let attempt = 0; // reconnect backoff counter
 let logCounter = 0;
 let errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+function detach(s: WebSocket): void {
+  s.onopen = s.onclose = s.onmessage = s.onerror = null;
+}
+
+function openSocket(): void {
+  const session = useStore.getState().session;
+  if (!session) return;
+  if (socket) {
+    detach(socket);
+    socket.close();
+  }
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  socket = new WebSocket(`${proto}//${location.host}/ws/table/${session.code}?token=${session.token}`);
+  socket.onopen = () => {
+    attempt = 0;
+    useStore.setState({ connected: true });
+  };
+  socket.onclose = (ev) => {
+    useStore.setState({ connected: false });
+    if (deliberate) return;
+    if (ev.code === 4404 || ev.code === 4401) {
+      // Table gone or token no longer valid — stop trying, drop back to home.
+      clearPersisted();
+      useStore.setState({ session: null, snapshot: null });
+      return;
+    }
+    scheduleReconnect();
+  };
+  socket.onmessage = handleMessage;
+}
+
+function scheduleReconnect(): void {
+  if (reconnectTimer) return;
+  const delay = Math.min(1000 * 2 ** attempt, 10_000);
+  attempt += 1;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    openSocket();
+  }, delay);
+}
+
+/** Reconnect immediately when the app returns to the foreground or the network
+ * comes back — the standby case that a slow backoff would otherwise miss. */
+function reconnectNow(): void {
+  if (!useStore.getState().session) return;
+  if (socket && socket.readyState === WebSocket.OPEN) return;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  attempt = 0;
+  openSocket();
+}
+
+if (typeof window !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") reconnectNow();
+  });
+  window.addEventListener("online", reconnectNow);
+}
 
 function seatName(snap: Snapshot | null, seat: number): string {
   return snap?.players.find((p) => p.seat === seat)?.name ?? `Seat ${seat}`;
@@ -91,7 +194,34 @@ function reconcileHandOrder(prev: number[], handIds: number[]): number[] {
   return [...kept, ...added];
 }
 
-export const useStore = create<StoreState>((set, get) => ({
+function handleMessage(ev: MessageEvent): void {
+  const msg = JSON.parse(ev.data) as ServerMessage;
+  if (msg.type === "snapshot") {
+    const handIds = msg.your_hand.map((c) => c.id);
+    const handSet = new Set(handIds);
+    useStore.setState((st) => ({
+      snapshot: msg,
+      selected: st.selected.filter((id) => handSet.has(id)),
+      handOrder: reconcileHandOrder(st.handOrder, handIds),
+      tray: st.tray
+        .map((g) => ({ ...g, card_ids: g.card_ids.filter((id) => handSet.has(id)) }))
+        .filter((g) => g.card_ids.length > 0),
+    }));
+  } else if (msg.type === "events") {
+    const snap = useStore.getState().snapshot;
+    const lines = msg.events
+      .map((e) => describe(snap, e.type, e.data))
+      .filter((text): text is string => text !== null)
+      .map((text) => ({ id: ++logCounter, text }));
+    if (lines.length) useStore.setState((st) => ({ log: [...lines.reverse(), ...st.log].slice(0, 40) }));
+  } else if (msg.type === "error") {
+    if (errorTimer) clearTimeout(errorTimer);
+    useStore.setState({ error: errorLabel(msg.code) });
+    errorTimer = setTimeout(() => useStore.setState({ error: null }), 4000);
+  }
+}
+
+export const useStore = create<StoreState>((set) => ({
   session: null,
   snapshot: null,
   connected: false,
@@ -102,44 +232,25 @@ export const useStore = create<StoreState>((set, get) => ({
   handOrder: [],
 
   enter: (session) => {
+    deliberate = false;
+    attempt = 0;
+    persist(session);
     set({ session, snapshot: null, log: [], selected: [], tray: [], handOrder: [] });
-    const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${location.host}/ws/table/${session.code}?token=${session.token}`;
-    socket?.close();
-    socket = new WebSocket(url);
-    socket.onopen = () => set({ connected: true });
-    socket.onclose = () => set({ connected: false });
-    socket.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data) as ServerMessage;
-      if (msg.type === "snapshot") {
-        const handIds = msg.your_hand.map((c) => c.id);
-        const handSet = new Set(handIds);
-        set((st) => ({
-          snapshot: msg,
-          selected: st.selected.filter((id) => handSet.has(id)),
-          handOrder: reconcileHandOrder(st.handOrder, handIds),
-          tray: st.tray
-            .map((g) => ({ ...g, card_ids: g.card_ids.filter((id) => handSet.has(id)) }))
-            .filter((g) => g.card_ids.length > 0),
-        }));
-      } else if (msg.type === "events") {
-        const snap = get().snapshot;
-        const lines = msg.events
-          .map((e) => describe(snap, e.type, e.data))
-          .filter((text): text is string => text !== null)
-          .map((text) => ({ id: ++logCounter, text }));
-        if (lines.length) set((st) => ({ log: [...lines.reverse(), ...st.log].slice(0, 40) }));
-      } else if (msg.type === "error") {
-        if (errorTimer) clearTimeout(errorTimer);
-        set({ error: errorLabel(msg.code) });
-        errorTimer = setTimeout(() => set({ error: null }), 4000);
-      }
-    };
+    openSocket();
   },
 
   leave: () => {
-    socket?.close();
-    socket = null;
+    deliberate = true;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    if (socket) {
+      detach(socket);
+      socket.close();
+      socket = null;
+    }
+    clearPersisted();
     set({
       session: null,
       snapshot: null,

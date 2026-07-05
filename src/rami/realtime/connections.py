@@ -17,12 +17,16 @@ class ConnectionManager:
     def register(self, code: str, seat: int, ws: WebSocket) -> None:
         self._by_code.setdefault(code, {})[seat] = ws
 
-    def unregister(self, code: str, seat: int, ws: WebSocket) -> None:
+    def unregister(self, code: str, seat: int, ws: WebSocket) -> bool:
+        """Drop `ws` for this seat. Returns True only if `ws` was still the
+        current socket (a newer reconnect for the same seat is left untouched)."""
         seats = self._by_code.get(code)
         if seats and seats.get(seat) is ws:
             del seats[seat]
             if not seats:
                 self._by_code.pop(code, None)
+            return True
+        return False
 
     def connected_seats(self, code: str) -> list[int]:
         return list(self._by_code.get(code, {}))

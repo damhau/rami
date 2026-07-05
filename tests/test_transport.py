@@ -99,6 +99,49 @@ def test_full_ws_round_start_and_turn_enforcement(client):
         assert err["code"] == "not_your_turn"
 
 
+def test_reconnect_with_same_token_resumes(client):
+    a = _create_table(client, "Alice")
+    b = client.post(f"/api/v1/tables/{a['code']}/join", json={"name": "Bob"}).json()
+
+    with client.websocket_connect(f"/ws/table/{a['code']}?token={a['token']}") as wa:
+        _recv_until(wa, lambda m: m["type"] == "snapshot")
+        with client.websocket_connect(f"/ws/table/{a['code']}?token={b['token']}") as wb:
+            _recv_until(wb, lambda m: m["type"] == "snapshot")
+            wa.send_json({"type": "start"})
+            _recv_until(wa, lambda m: m.get("phase") == "await_draw")
+        # Bob dropped. Reconnecting with the same token re-attaches to his seat.
+        with client.websocket_connect(f"/ws/table/{a['code']}?token={b['token']}") as wb2:
+            snap = _recv_until(wb2, lambda m: m["type"] == "snapshot")
+            assert snap["you"] == b["seat"]
+            assert snap["phase"] == "await_draw"  # game state preserved
+            assert len(snap["your_hand"]) == 13
+            assert snap["players"][b["seat"]]["connected"] is True
+
+
+def test_disconnected_seat_is_auto_played(client, monkeypatch):
+    import rami.realtime.ws as wsmod
+
+    monkeypatch.setattr(wsmod, "DISCONNECT_TIMEOUT_S", 0.3)
+    monkeypatch.setattr(wsmod, "AUTOPLAY_STEP_S", 0.05)
+
+    a = _create_table(client, "Alice")
+    b = client.post(f"/api/v1/tables/{a['code']}/join", json={"name": "Bob"}).json()
+
+    with client.websocket_connect(f"/ws/table/{a['code']}?token={a['token']}") as wa:
+        _recv_until(wa, lambda m: m["type"] == "snapshot")
+        with client.websocket_connect(f"/ws/table/{a['code']}?token={b['token']}") as wb:
+            _recv_until(wb, lambda m: m["type"] == "snapshot")
+            wa.send_json({"type": "start"})
+            sa = _recv_until(wa, lambda m: m.get("phase") == "await_draw")
+            _recv_until(wb, lambda m: m.get("phase") == "await_draw")
+            assert sa["turn_seat"] == 1  # it is Bob's turn
+        # Bob dropped mid-turn; the server should auto-play his turn and pass it on.
+        passed = _recv_until(
+            wa, lambda m: m["type"] == "snapshot" and m.get("turn_seat") == 0, limit=40
+        )
+        assert passed["turn_seat"] == 0
+
+
 def test_non_host_cannot_start(client):
     a = _create_table(client, "Alice")
     b = client.post(f"/api/v1/tables/{a['code']}/join", json={"name": "Bob"}).json()

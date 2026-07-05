@@ -98,10 +98,18 @@ flow (create/join/inspect) under `/api/v1/tables`; seat 0 is the host.
 Pydantic discriminated union) → apply under `session.lock` → broadcast. **`protocol.py` also
 does per-seat redaction**: `build_snapshot` gives each player their own hand but opponents
 only as counts (`hand_count`) — never send raw `GameState` to a client. `connections.py`
-tracks live sockets per (code, seat). After each broadcast (and on connect), `_run_bots`
-drives any bot seats (`Seat.is_bot`) — applying `ai.next_bot_intent` moves with a short
-delay — until it is a human's turn again. Solo games are created via `TableManager.create_solo`
-(host + N bots, started immediately) behind `POST /api/v1/tables/solo`.
+tracks live sockets per (code, seat). After each broadcast (and on connect), `_advance`
+runs `_run_bots` (drives `Seat.is_bot` seats via `ai.next_bot_intent`) then arms an idle
+timer: if a human seat doesn't act in time it is **auto-played by the bot policy**
+(`TURN_TIMEOUT_S` when connected, `DISCONNECT_TIMEOUT_S` when not), so a dropped/absent
+player never stalls the table. Stale timers are invalidated by `session.decision_nonce`.
+Solo games: `TableManager.create_solo` behind `POST /api/v1/tables/solo`.
+
+**Reconnection.** The token identifies a *seat*, so re-opening the WS with the same token
+re-attaches and replays the snapshot; `connections.register` replaces the old socket and
+`unregister` only clears the seat if it still owns it (guards the reconnect race). The
+client (`web/src/store.ts`) persists the session (localStorage), auto-reconnects on close /
+`visibilitychange` / `online`, and drops to Home on a `4404`/`4401` close.
 
 ### Core — `src/rami/core/`
 

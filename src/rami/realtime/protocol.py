@@ -21,6 +21,7 @@ from rami.game.intents import (
     MeldSpec,
     PassFreeCard,
     RecoverJoker,
+    ReturnDiscard,
 )
 from rami.game.melds import Meld, MeldKind, ReprCard, meld_points
 from rami.game.state import Event, GameState, Phase
@@ -77,6 +78,10 @@ class DiscardMsg(_Base):
     card_id: int
 
 
+class ReturnDiscardMsg(_Base):
+    type: Literal["return_discard"]
+
+
 class StartMsg(_Base):
     type: Literal["start"]
 
@@ -99,6 +104,7 @@ ClientMessage = Annotated[
     | LayOffMsg
     | RecoverJokerMsg
     | DiscardMsg
+    | ReturnDiscardMsg
     | StartMsg
     | NextRoundMsg
     | ReadyMsg,
@@ -128,6 +134,8 @@ def to_engine_intent(seat: int, msg: ClientMessage) -> Intent | None:
             return RecoverJoker(seat, msg.meld_id, msg.card_id)
         case DiscardMsg():
             return Discard(seat, msg.card_id)
+        case ReturnDiscardMsg():
+            return ReturnDiscard(seat)
         case _:
             return None
 

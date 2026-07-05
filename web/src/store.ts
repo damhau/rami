@@ -70,6 +70,8 @@ function describe(snap: Snapshot | null, type: string, data: Record<string, unkn
       return t.event.recoveredJoker(who(data.seat));
     case "discarded":
       return t.event.discarded(who(data.seat));
+    case "returned_discard":
+      return t.event.returnedDiscard(who(data.seat));
     case "round_over":
       return t.event.roundOver(data.round_no as number, who(data.winner_seat));
     case "game_over":

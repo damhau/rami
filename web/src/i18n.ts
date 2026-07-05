@@ -95,6 +95,7 @@ export const t = {
     waitingFor: (who: string) => `En attente de ${who}…`,
     mustLayTaken:
       "Vous avez pris une carte de la défausse — vous devez l'utiliser dans une combinaison avant de défausser.",
+    cancelPickup: "Annuler la prise",
     tray: "Combinaison en préparation",
     trayTotal: (pts: number) => `${pts} pts`,
     enoughToGoOut: "assez pour sortir",
@@ -156,6 +157,7 @@ export const t = {
     laidOff: (who: string) => `${who} a complété une combinaison.`,
     recoveredJoker: (who: string) => `${who} a récupéré un joker.`,
     discarded: (who: string) => `${who} a défaussé.`,
+    returnedDiscard: (who: string) => `${who} a remis la carte à la défausse.`,
     roundOver: (n: number, who: string) => `Manche ${n} terminée — ${who} est sorti.`,
     gameOver: "Partie terminée !",
   },

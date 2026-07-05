@@ -153,11 +153,12 @@ export function GameTable({ snap }: { snap: Snapshot }) {
   const [goOutPrefix, goOutPts] = t.game.goOutWith(snap.go_out_min_points);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ---------------- felt ---------------- */}
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      {/* ---------------- felt (scrolls if taller than the available space) ---------------- */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {/* pb-20 keeps the felt's flowing content (melds) clear of the absolute
           status pill and free-card prompt pinned near the bottom. */}
-      <div className="felt relative min-h-[420px] overflow-hidden rounded-3xl px-3 pt-3 pb-20 sm:px-4 sm:pt-4 md:min-h-[520px] md:px-6 md:pt-6">
+      <div className="felt relative min-h-full overflow-hidden rounded-3xl px-3 pt-3 pb-20 sm:px-4 sm:pt-4 md:px-6 md:pt-6">
         {/* contract banner */}
         <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
           <div className="flex flex-wrap items-center justify-center gap-3 rounded-full border border-gold/30 bg-ink/70 px-4 py-1.5 backdrop-blur">
@@ -350,12 +351,24 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </div>
         </div>
       </div>
+      </div>
 
-      {/* ---------------- player dock ---------------- */}
-      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4">
+      {/* ---------------- player dock (pinned; hand + actions always reachable) ---------------- */}
+      <div
+        className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+      >
         {mustLayTaken && (
-          <div className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
-            {t.game.mustLayTaken}
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
+            <span className="min-w-0 flex-1">{t.game.mustLayTaken}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => send({ type: "return_discard" })}
+            >
+              {t.game.cancelPickup}
+            </Button>
           </div>
         )}
 

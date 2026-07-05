@@ -24,6 +24,7 @@ from .intents import (
     LayOff,
     PassFreeCard,
     RecoverJoker,
+    ReturnDiscard,
 )
 from .melds import (
     Meld,
@@ -122,6 +123,8 @@ def apply(state: GameState, intent: Intent) -> tuple[GameState, list[Event]]:
             _recover_joker(s, intent, events)
         case Discard():
             _discard(s, intent, events)
+        case ReturnDiscard():
+            _return_discard(s, intent, events)
         case _:  # pragma: no cover - exhaustive above
             raise IllegalMove("unknown intent")
 
@@ -202,6 +205,22 @@ def _draw_discard(s: GameState, intent: DrawDiscard, events: list[Event]) -> Non
     s.taken_from_discard_id = card.id
     s.phase = Phase.AWAIT_DISCARD
     events.append(Event("drew", {"seat": intent.seat, "source": "discard", "card_id": card.id}))
+
+
+def _return_discard(s: GameState, intent: ReturnDiscard, events: list[Event]) -> None:
+    """Undo a discard pickup that hasn't been melded yet — the escape hatch when
+    the taken card can't be used (otherwise the turn would soft-lock)."""
+    if s.phase != Phase.AWAIT_DISCARD:
+        raise IllegalMove("there is nothing to put back")
+    _require_turn(s, intent.seat)
+    if s.taken_from_discard_id is None:
+        raise IllegalMove("you did not take a card from the discard")
+    player = s.player(intent.seat)
+    card = _take_from_hand(player, s.taken_from_discard_id)
+    s.discard.append(card)
+    s.taken_from_discard_id = None
+    s.phase = Phase.AWAIT_DRAW
+    events.append(Event("returned_discard", {"seat": intent.seat, "card_id": card.id}))
 
 
 # --------------------------------------------------------------------------- #

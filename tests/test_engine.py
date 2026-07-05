@@ -18,6 +18,7 @@ from rami.game.intents import (
     MeldSpec,
     PassFreeCard,
     RecoverJoker,
+    ReturnDiscard,
 )
 from rami.game.melds import Meld, MeldKind
 from rami.game.state import Phase
@@ -177,6 +178,30 @@ def test_draw_discard_sets_obligation_and_blocks_plain_discard():
     assert g.phase == Phase.AWAIT_DISCARD
     with pytest.raises(IllegalMove):
         apply(g, Discard(0, 900))  # cannot discard before laying the taken card
+
+
+def test_return_discard_undoes_the_pickup():
+    # Escape hatch for the soft-lock: if the taken card can't be used, put it back.
+    g = two_player_state([*_filler(12)], _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
+    g.discard = [card(S, 4, 40), card(H, 9, 50)]  # 50 is the face-up top
+    g.stock = [card(S, 2, 1)]
+    g, _ = apply(g, DrawDiscard(0))
+    assert g.taken_from_discard_id == 50
+    assert len(g.players[0].hand) == 13
+
+    g, ev = apply(g, ReturnDiscard(0))
+    assert g.taken_from_discard_id is None
+    assert g.phase == Phase.AWAIT_DRAW  # back to the draw step
+    assert g.discard[-1].id == 50  # card is back on top of the discard
+    assert len(g.players[0].hand) == 12
+    assert not any(c.id == 50 for c in g.players[0].hand)
+    assert any(e.type == "returned_discard" for e in ev)
+
+
+def test_return_discard_rejected_when_nothing_taken():
+    g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DISCARD, turn=0)
+    with pytest.raises(IllegalMove):
+        apply(g, ReturnDiscard(0))
 
 
 # --------------------------------------------------------------------------- #

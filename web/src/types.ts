@@ -117,6 +117,7 @@ export type ClientMessage =
   | { type: "lay_off"; meld_id: number; card_id: number }
   | { type: "recover_joker"; meld_id: number; card_id: number }
   | { type: "discard"; card_id: number }
+  | { type: "return_discard" }
   | { type: "start" }
   | { type: "next_round" }
   | { type: "ready"; ready: boolean };

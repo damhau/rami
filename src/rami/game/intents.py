@@ -71,6 +71,14 @@ class Discard:
     card_id: int
 
 
+@dataclass(frozen=True)
+class ReturnDiscard:
+    """Cancel a discard pickup: put the taken card back and return to the draw
+    step. Only valid while that card hasn't been melded yet."""
+
+    seat: int
+
+
 Intent = (
     DrawStock
     | DrawDiscard
@@ -80,4 +88,5 @@ Intent = (
     | LayOff
     | RecoverJoker
     | Discard
+    | ReturnDiscard
 )

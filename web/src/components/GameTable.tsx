@@ -150,34 +150,31 @@ export function GameTable({ snap }: { snap: Snapshot }) {
     return t.game.waitingFor(turn);
   })();
 
-  const [goOutPrefix, goOutPts] = t.game.goOutWith(snap.go_out_min_points);
-
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* ---------------- felt (scrolls if taller than the available space) ---------------- */}
       <div className="min-h-0 flex-1 overflow-y-auto">
       {/* pb-20 keeps the felt's flowing content (melds) clear of the absolute
           status pill and free-card prompt pinned near the bottom. */}
-      <div className="felt relative min-h-full overflow-hidden rounded-3xl px-3 pt-3 pb-20 sm:px-4 sm:pt-4 md:px-6 md:pt-6">
-        {/* contract banner */}
-        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
-          <div className="flex flex-wrap items-center justify-center gap-3 rounded-full border border-gold/30 bg-ink/70 px-4 py-1.5 backdrop-blur">
-            <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-semibold text-gold">
+      <div className="felt relative min-h-full overflow-hidden rounded-3xl px-3 pt-3 pb-14 sm:px-4 sm:pt-4 sm:pb-20 md:px-6 md:pt-6">
+        {/* contract banner — one compact line to save vertical space */}
+        <div className="absolute left-1/2 top-2 z-10 max-w-[calc(100%-0.5rem)] -translate-x-1/2">
+          <div className="flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-gold/30 bg-ink/70 px-3 py-1 backdrop-blur">
+            <span className="rounded-full bg-gold/15 px-1.5 py-0.5 text-[10px] font-semibold text-gold sm:text-[11px]">
               {t.game.round(snap.round_no)}
             </span>
-            <span className="text-sm font-semibold">
-              {t.game.contract} : {snap.contract ? contractLabel(snap.contract.requirements) : "—"}
+            <span className="text-[11px] font-semibold sm:text-sm">
+              {snap.contract ? contractLabel(snap.contract.requirements) : "—"}
             </span>
-            <span className="hidden h-4 w-px bg-white/15 sm:block" />
-            <span className="text-[11px] text-slate-300">
-              {goOutPrefix}
-              <b className="text-white">{goOutPts}</b>
+            <span className="h-3 w-px bg-white/15" />
+            <span className="text-[10px] text-slate-300 sm:text-[11px]">
+              ≥ <b className="text-white">{snap.go_out_min_points} pts</b>
             </span>
           </div>
         </div>
 
         {/* opponents */}
-        <div className="mt-12 flex flex-wrap items-start justify-center gap-4 md:mt-14 md:gap-8">
+        <div className="mt-9 flex flex-wrap items-start justify-center gap-3 sm:mt-12 sm:gap-4 md:mt-14 md:gap-8">
           {opponents.map((p) => (
             <div key={p.seat} className="flex flex-col items-center">
               <div
@@ -211,7 +208,7 @@ export function GameTable({ snap }: { snap: Snapshot }) {
                   </div>
                 </div>
               </div>
-              <div className="mt-2 flex">
+              <div className="mt-2 hidden sm:flex">
                 {Array.from({ length: Math.min(p.hand_count, 7) }).map((_, i) => (
                   <div key={i} className={i ? "-ml-7" : ""}>
                     <CardBack size="sm" />
@@ -223,7 +220,7 @@ export function GameTable({ snap }: { snap: Snapshot }) {
         </div>
 
         {/* center: stock + discard */}
-        <div className="mt-6 flex items-center justify-center gap-6 md:mt-8 md:gap-8">
+        <div className="mt-3 flex items-center justify-center gap-6 sm:mt-6 md:mt-8 md:gap-8">
           <div className="flex flex-col items-center gap-1">
             <button
               disabled={!canDraw}
@@ -263,7 +260,7 @@ export function GameTable({ snap }: { snap: Snapshot }) {
         </div>
 
         {/* table melds */}
-        <div className="mt-6 md:mt-8">
+        <div className="mt-4 md:mt-8">
           <div className="mb-2 text-center text-[11px] uppercase tracking-wider text-slate-300/80">
             {t.game.tableMelds}{" "}
             {layOffMode && <span className="text-gold">{t.game.clickToLayOff}</span>}
@@ -339,11 +336,11 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </div>
         )}
 
-        {/* status hint */}
-        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
+        {/* status hint — smaller on phones */}
+        <div className="pointer-events-none absolute bottom-3 left-1/2 max-w-[calc(100%-1rem)] -translate-x-1/2">
           <div
             className={cn(
-              "rounded-full border border-white/10 bg-ink/85 px-4 py-1.5 text-sm shadow-xl",
+              "truncate rounded-full border border-white/10 bg-ink/85 px-3 py-1 text-[11px] shadow-xl sm:px-4 sm:py-1.5 sm:text-sm",
               isMyTurn ? "text-gold" : "text-slate-200",
             )}
           >
@@ -465,29 +462,43 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </SortableContext>
         </DndContext>
 
-        {/* actions — 2-col grid on phones (Discard spans full width), flex row on sm+ */}
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-          <Button disabled={!canDraw} onClick={() => send({ type: "draw_stock" })}>
+        {/* actions — one compact row on phones, wraps to full labels on sm+ */}
+        <div className="mt-3 flex items-center gap-1.5 sm:flex-wrap sm:gap-2">
+          <Button
+            size="sm"
+            className="min-w-0 flex-1 text-xs sm:flex-none sm:text-sm"
+            disabled={!canDraw}
+            onClick={() => send({ type: "draw_stock" })}
+          >
             {t.game.draw}
           </Button>
           <Button
+            size="sm"
             variant="outline"
+            className="min-w-0 flex-1 text-xs sm:flex-none sm:text-sm"
             disabled={!canDraw || !snap.discard_top}
             onClick={() => send({ type: "draw_discard" })}
           >
-            {t.game.takeDiscard} {snap.discard_top ? `(${snap.discard_top.label})` : ""}
+            <span className="sm:hidden">{t.game.takeShort}</span>
+            <span className="hidden sm:inline">
+              {t.game.takeDiscard} {snap.discard_top ? `(${snap.discard_top.label})` : ""}
+            </span>
           </Button>
           <span className="mx-1 hidden h-6 w-px bg-white/10 sm:block" />
           <Button
+            size="sm"
             variant="outline"
+            className="min-w-0 flex-1 text-xs sm:flex-none sm:text-sm"
             disabled={!canAct || selected.length < 3}
             onClick={addMeld}
           >
-            {t.game.addMeld}
+            <span className="sm:hidden">{t.game.addShort}</span>
+            <span className="hidden sm:inline">{t.game.addMeld}</span>
           </Button>
           <Button
+            size="sm"
             variant="destructive"
-            className="col-span-2 sm:col-span-1 sm:ml-auto"
+            className="min-w-0 flex-1 text-xs sm:ml-auto sm:flex-none sm:text-sm"
             disabled={!canAct || selected.length !== 1 || mustLayTaken}
             onClick={discard}
           >

@@ -1,3 +1,9 @@
+## v0.3.7 (2026-07-05)
+
+### Fix
+
+- strip the player-info row from the hand dock
+
 ## v0.3.6 (2026-07-05)
 
 ### Fix

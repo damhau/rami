@@ -1,3 +1,9 @@
+## v0.3.5 (2026-07-05)
+
+### Fix
+
+- move turn status to a top bar; trim home top space
+
 ## v0.3.4 (2026-07-05)
 
 ### Fix

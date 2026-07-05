@@ -64,15 +64,19 @@ def start_round(state: GameState) -> tuple[GameState, list[Event]]:
     s = copy.deepcopy(state)
     n = s.num_players
 
-    if s.phase == Phase.LOBBY:
+    first_round = s.phase == Phase.LOBBY
+    if first_round:
         s.round_no = 1
-        # dealer stays as configured (seat 0); starter is the player after.
     else:
         s.round_no += 1
         s.dealer_seat = (s.dealer_seat + 1) % n
 
     rng = _make_rng(s)
     s.shuffle_count += 1
+    if first_round:
+        # Random opening dealer so the same seat doesn't always start (the
+        # starter is the player after the dealer). Deterministic from the seed.
+        s.dealer_seat = rng.randrange(n)
     deck = build_deck(rng)
 
     for p in s.players:

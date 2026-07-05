@@ -92,10 +92,11 @@ def test_full_ws_round_start_and_turn_enforcement(client):
         assert sa["players"][1]["hand_count"] == 13
         assert sa["contract"]["label"] == "1 triplet"
 
-        # Dealer is seat 0, so seat 1 (Bob) starts. Alice acting is illegal.
-        assert sa["turn_seat"] == 1
-        wa.send_json({"type": "draw_stock"})
-        err = _recv_until(wa, lambda m: m["type"] == "error")
+        # The opening seat is random; whoever is NOT on turn drawing is illegal.
+        turn = sa["turn_seat"]
+        off = wb if turn == 0 else wa
+        off.send_json({"type": "draw_stock"})
+        err = _recv_until(off, lambda m: m["type"] == "error")
         assert err["code"] == "not_your_turn"
 
 
@@ -127,19 +128,30 @@ def test_disconnected_seat_is_auto_played(client, monkeypatch):
     a = _create_table(client, "Alice")
     b = client.post(f"/api/v1/tables/{a['code']}/join", json={"name": "Bob"}).json()
 
-    with client.websocket_connect(f"/ws/table/{a['code']}?token={a['token']}") as wa:
-        _recv_until(wa, lambda m: m["type"] == "snapshot")
-        with client.websocket_connect(f"/ws/table/{a['code']}?token={b['token']}") as wb:
-            _recv_until(wb, lambda m: m["type"] == "snapshot")
-            wa.send_json({"type": "start"})
-            sa = _recv_until(wa, lambda m: m.get("phase") == "await_draw")
-            _recv_until(wb, lambda m: m.get("phase") == "await_draw")
-            assert sa["turn_seat"] == 1  # it is Bob's turn
-        # Bob dropped mid-turn; the server should auto-play his turn and pass it on.
+    cm = {
+        0: client.websocket_connect(f"/ws/table/{a['code']}?token={a['token']}"),
+        1: client.websocket_connect(f"/ws/table/{a['code']}?token={b['token']}"),
+    }
+    ws = {seat: c.__enter__() for seat, c in cm.items()}
+    try:
+        _recv_until(ws[0], lambda m: m["type"] == "snapshot")
+        _recv_until(ws[1], lambda m: m["type"] == "snapshot")
+        ws[0].send_json({"type": "start"})
+        sa = _recv_until(ws[0], lambda m: m.get("phase") == "await_draw")
+        _recv_until(ws[1], lambda m: m.get("phase") == "await_draw")
+
+        turn = sa["turn_seat"]
+        # The player on turn drops; the server auto-plays and passes the turn on.
+        cm.pop(turn).__exit__(None, None, None)
         passed = _recv_until(
-            wa, lambda m: m["type"] == "snapshot" and m.get("turn_seat") == 0, limit=40
+            ws[1 - turn],
+            lambda m: m["type"] == "snapshot" and m.get("turn_seat") != turn,
+            limit=40,
         )
-        assert passed["turn_seat"] == 0
+        assert passed["turn_seat"] != turn
+    finally:
+        for c in cm.values():
+            c.__exit__(None, None, None)
 
 
 def test_non_host_cannot_start(client):

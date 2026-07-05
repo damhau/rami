@@ -48,6 +48,18 @@ def test_start_round_deals_13_each_and_flips_discard():
     assert any(e.type == "round_started" for e in ev)
 
 
+def test_opening_dealer_is_randomized():
+    # Different seeds should not always start the same seat (the old code always
+    # made seat 0 the dealer, so seat 1 always began).
+    dealers = set()
+    for seed in range(12):
+        g = new_game(["A", "B", "C"], rng_seed=seed)
+        g, _ = start_round(g)
+        assert g.turn_seat == (g.dealer_seat + 1) % 3
+        dealers.add(g.dealer_seat)
+    assert len(dealers) > 1
+
+
 def test_apply_does_not_mutate_input_state():
     g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW)
     g.stock = [card(S, 2, 1)]

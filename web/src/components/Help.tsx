@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./ui/button";
 
 const CONTRACTS: [number, string][] = [
@@ -33,7 +34,10 @@ export function HelpButton() {
       <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title="Aide">
         Aide
       </Button>
-      {open && (
+      {open &&
+        // Portal to <body> so the header's backdrop-blur (a containing block for
+        // fixed elements) doesn't trap the overlay behind the table.
+        createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           onClick={() => setOpen(false)}
@@ -160,7 +164,8 @@ export function HelpButton() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

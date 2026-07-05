@@ -1,7 +1,7 @@
-- [ ] drag and drop does not work in firefox on mac
+- [x] drag and drop does not work in firefox on mac
 - [x] when I scan a qr code the "join a game" should be hidden
-- [ ] On some brwoser the "table" is not "full screen" there is a scrollbar on the right, is this normal ?
-- [ ] the reponsive version does not "work" on the phone, it should be "full screen" and currently I have to scroll or zoom
+- [x] On some brwoser the "table" is not "full screen" there is a scrollbar on the right, is this normal ?
+- [x] the reponsive version does not "work" on the phone, it should be "full screen" and currently I have to scroll or zoom
 - [x] the status "A vous - combiner est defausse" is over the card on the table, we might need to add a bit of spae above this kind of message. or we might just remove this. what do you think ?
 - [x] when playing againt computer it shows "Ordinateur 1hors ligne"
 - [x] the online help is missing a "close" button and it show only the rules it should also explain how to use the game when playing, what the button does, etc...
@@ -9,3 +9,4 @@
 rami-74c9856f86-wswwf rami {"ts": "2026-07-05 12:39:55,798", "level": "ERROR", "name": "rami.realtime.ws", "request_id": "-", "message": "bot.move_failed", "exc_info": "Traceback (most recent call last):\n  File \"/app/src/rami/realtime/ws.py\", line 96, in _run_bots\n    events = session.apply(intent)\n             ^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/src/rami/tables/manager.py\", line 107, in apply\n    self.state, events = engine.apply(self.state, intent)\n                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/src/rami/game/engine.py\", line 118, in apply\n    _lay_melds(s, intent, events)\n  File \"/app/src/rami/game/engine.py\", line 277, in _lay_melds\n    raise ContractNotMet(f\"need >= {GO_OUT_MIN_POINTS} points, laid {total}\")\nrami.core.exceptions.ContractNotMet: need >= 40 points, laid 36", "code": "6976", "seat": 1}
 - [x] I picked up the card from the other player defausse and now I'm stuck with "Vous avez pris une carte de la défausse — vous devez l'utiliser dans une combinaison avant de défausser."
 - [ ] Some of the message are still in english, might miss some translation
+- [ ] the help modal is hidden behind the mat and should be with a kind of header and better positionned

@@ -50,7 +50,9 @@ function SortableCard({
       // select-none + draggable=false stop Firefox from starting a native
       // text/image drag that would pre-empt dnd-kit's pointer drag.
       draggable={false}
-      className={cn(overlap && "sm:-ml-3", "select-none", isDragging && "touch-none")}
+      // touch-none lets dnd-kit's touch sensor receive the drag instead of the
+      // browser hijacking it as a scroll (the hand wraps, so no scroll is lost).
+      className={cn(overlap && "sm:-ml-3", "touch-none select-none")}
       {...attributes}
       {...listeners}
     >

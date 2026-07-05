@@ -40,7 +40,7 @@ packages = ["src/rami"]
 [tool.commitizen]
 version = "0.2.0"
 tag_format = "v$major.$minor.$patch$prerelease"
-bump_message = "release $current_version -> $new_version [skip ci]"
+bump_message = "release $current_version -> $new_version"
 changelog_file = "CHANGELOG.md"
 version_files = [
     "pyproject.toml:^version",

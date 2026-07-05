@@ -1,3 +1,9 @@
+## v0.4.4 (2026-07-05)
+
+### Fix
+
+- anchor the mobile scores panel to the top
+
 ## v0.4.3 (2026-07-05)
 
 ### Fix

@@ -1,3 +1,13 @@
+## v0.3.0 (2026-07-05)
+
+### Feat
+
+- expose and display the app version
+
+### Fix
+
+- bot go-out crash and several UI/UX bugs
+
 ## v0.2.0 (2026-07-05)
 
 ### Feat

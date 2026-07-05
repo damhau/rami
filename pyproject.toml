@@ -1,6 +1,6 @@
 [project]
 name = "rami"
-version = "0.2.0"
+version = "0.3.0"
 description = "Online multiplayer Rami Portugais (Portuguese Rummy)"
 requires-python = ">=3.12"
 readme = "README.md"
@@ -38,7 +38,7 @@ packages = ["src/rami"]
 # ---------------------------------------------------------------------
 
 [tool.commitizen]
-version = "0.2.0"
+version = "0.3.0"
 tag_format = "v$major.$minor.$patch$prerelease"
 bump_message = "release $current_version -> $new_version"
 changelog_file = "CHANGELOG.md"

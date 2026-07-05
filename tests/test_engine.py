@@ -278,6 +278,21 @@ def test_recover_joker_swaps_real_card_for_joker():
     assert not any(c.is_joker for c in g.table_melds[0].cards)
 
 
+def test_lay_off_matching_card_recovers_joker():
+    # Laying the exact represented card onto a meld (a lay-off action) recovers
+    # the joker rather than extending the meld (DESIGN.md §3.9).
+    m = Meld(0, SET, [card(S, 7, 1), card(H, 7, 2), card(D, 7, 3), joker(4)], 0)
+    assert m.represents[4].suit == C  # joker stands in for 7C
+    g = two_player_state([card(C, 7, 5), card(S, 2, 6)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    g, ev = apply(g, LayOff(0, 0, 5))
+    assert any(c.id == 4 and c.is_joker for c in g.players[0].hand)  # joker recovered
+    assert not any(c.is_joker for c in g.table_melds[0].cards)
+    assert len(g.table_melds[0].cards) == 4  # meld did not grow — the 7C took the slot
+    assert any(e.type == "recovered_joker" for e in ev)
+
+
 def test_recover_joker_with_card_taken_from_discard_clears_obligation():
     # Regression: drawing the face-up card and using it to recover a joker must
     # discharge the discard-pickup obligation, so the turn can finish on a

@@ -299,6 +299,39 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
         _end_round(s, intent.seat, events)
 
 
+def _matching_joker_index(meld: Meld, real: Card) -> int | None:
+    """Index of a joker in `meld` that stands in for the real card `real`, if any."""
+    return next(
+        (
+            i
+            for i, c in enumerate(meld.cards)
+            if c.is_joker
+            and (rep := meld.represents.get(c.id)) is not None
+            and repr_matches_card(rep, real)
+        ),
+        None,
+    )
+
+
+def _do_recover_joker(
+    s: GameState, player: PlayerState, meld: Meld, joker_idx: int, real: Card, events: list[Event]
+) -> None:
+    joker = meld.cards[joker_idx]
+    meld.cards[joker_idx] = real
+    meld.refresh()
+    _take_from_hand(player, real.id)
+    player.hand.append(joker)
+    # Laying the exact card to recover a joker discharges the discard-pickup
+    # obligation (same as lay-off), so the turn can finish on a discard.
+    if s.taken_from_discard_id == real.id:
+        s.taken_from_discard_id = None
+    events.append(
+        Event("recovered_joker", {"seat": player.seat, "meld_id": meld.id, "joker_id": joker.id})
+    )
+    if not player.hand:
+        _end_round(s, player.seat, events)
+
+
 def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
     if s.phase != Phase.AWAIT_DISCARD:
         raise IllegalMove("you can only lay off after drawing, before discarding")
@@ -310,6 +343,12 @@ def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
     if meld is None:
         raise IllegalMove(f"meld {intent.meld_id} not found")
     card = _hand_card(player, intent.card_id)
+    # Laying the exact card a joker represents reclaims that joker rather than
+    # extending the meld (DESIGN.md §3.9) — do that first so the joker comes back.
+    joker_idx = _matching_joker_index(meld, card)
+    if joker_idx is not None:
+        _do_recover_joker(s, player, meld, joker_idx, card, events)
+        return
     new_cards = try_lay_off(meld, card)
     if new_cards is None:
         raise IllegalMove(f"{card.label} cannot extend that meld")
@@ -337,31 +376,10 @@ def _recover_joker(s: GameState, intent: RecoverJoker, events: list[Event]) -> N
     if real.is_joker:
         raise IllegalMove("you recover a joker by laying a real card")
 
-    joker_idx = next(
-        (
-            i
-            for i, c in enumerate(meld.cards)
-            if c.is_joker
-            and (rep := meld.represents.get(c.id)) is not None
-            and repr_matches_card(rep, real)
-        ),
-        None,
-    )
+    joker_idx = _matching_joker_index(meld, real)
     if joker_idx is None:
         raise IllegalMove(f"no joker in that meld represents {real.label}")
-
-    joker = meld.cards[joker_idx]
-    meld.cards[joker_idx] = real
-    meld.refresh()
-    _take_from_hand(player, intent.card_id)
-    player.hand.append(joker)
-    # Laying the exact card to recover a joker discharges the discard-pickup
-    # obligation (same as lay-off), so the turn can finish on a discard.
-    if s.taken_from_discard_id == real.id:
-        s.taken_from_discard_id = None
-    events.append(
-        Event("recovered_joker", {"seat": intent.seat, "meld_id": meld.id, "joker_id": joker.id})
-    )
+    _do_recover_joker(s, player, meld, joker_idx, real, events)
 
 
 # --------------------------------------------------------------------------- #

@@ -17,5 +17,5 @@
 - [x] add a mode "learning" where there is a button "help" that will recommand what to do based on the hand of the player
 - [x] add an online help/guide/manual
 - [x] when you "replace" a joker wiht the corresponding card on the mat the joker should come back to the player hands
-- [ ] Store player name in a cookie
-- [ ] Remove the 🤖 it is already called Ordinateur no need to add an emoji
+- [X] Store player name in a cookie
+- [X] Remove the 🤖 it is already called Ordinateur/Computer no need to add an emoji

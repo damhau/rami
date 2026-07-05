@@ -1,3 +1,9 @@
+## v0.4.2 (2026-07-05)
+
+### Fix
+
+- drop the empty "table melds" label
+
 ## v0.4.1 (2026-07-05)
 
 ### Fix

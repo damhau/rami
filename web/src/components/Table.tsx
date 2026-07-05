@@ -90,12 +90,12 @@ export function Table() {
         </div>
       </div>
 
-      {/* mobile scoreboard drawer */}
+      {/* mobile scoreboard panel — drops down from just below the header */}
       {showScores && inGame && snapshot && (
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setShowScores(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-y-auto rounded-t-2xl border-t border-white/10 bg-ink p-4 pb-8 shadow-2xl"
+            className="absolute inset-x-2 top-[calc(3.25rem+env(safe-area-inset-top))] max-h-[calc(100dvh-4.75rem-env(safe-area-inset-top))] overflow-y-auto rounded-2xl border border-white/10 bg-ink p-4 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">

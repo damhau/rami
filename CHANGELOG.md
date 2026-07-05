@@ -1,3 +1,9 @@
+## v0.4.5 (2026-07-05)
+
+### Fix
+
+- translate server error messages to French (#11)
+
 ## v0.4.4 (2026-07-05)
 
 ### Fix

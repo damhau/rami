@@ -1,3 +1,9 @@
+## v0.4.0 (2026-07-05)
+
+### Feat
+
+- remember the player name; drop the bot emoji
+
 ## v0.3.7 (2026-07-05)
 
 ### Fix

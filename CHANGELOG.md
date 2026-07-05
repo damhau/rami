@@ -1,3 +1,9 @@
+## v0.6.0 (2026-07-05)
+
+### Feat
+
+- auto-reconnect and turn-timeout/abandonment
+
 ## v0.5.2 (2026-07-05)
 
 ### Fix

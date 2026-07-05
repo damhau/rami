@@ -19,3 +19,18 @@
 - [x] when you "replace" a joker wiht the corresponding card on the mat the joker should come back to the player hands
 - [X] Store player name in a cookie
 - [X] Remove the 🤖 it is already called Ordinateur/Computer no need to add an emoji
+- [ ] When playing against the computer I have the feeling it is always him starting, is it the case ? can we randomize this
+- [ ] not sure if we implemnted this rule correctly
+
+Carte gratuite
+À 2 joueurs
+- Au premier tour, le joueur qui commence peut prendre la carte visible dans la défausse ou la refuser.
+- S’il prend la carte de la défausse, il doit sortir immédiatement, c’est-à-dire poser son contrat avec au
+moins 40 points.
+- S’il refuse la carte, le joueur qui ne commence pas peut la prendre gratuitement.
+- La carte gratuite peut être prise sans obligation immédiate de sortir.
+À 3 joueurs ou plus
+- Le principe de carte gratuite s’applique lorsqu’un joueur refuse la carte visible.
+- Les joueurs suivants peuvent alors la récupérer gratuitement.
+- Cela peut permettre de récupérer plusieurs cartes successivement.
+- Les joueurs peuvent donc parfois avoir plus de 13 cartes en main.

@@ -83,7 +83,7 @@ export const t = {
     discardPile: "Défausse",
     empty: "vide",
     tableMelds: "Combinaisons sur la table",
-    clickToLayOff: "· cliquez une combinaison pour compléter",
+    clickToLayOff: "Cliquez une combinaison pour la compléter",
     noMelds: "Aucune combinaison.",
     freePrompt: (label: string) => [`Prendre `, label, ` de la défausse gratuitement ?`] as const,
     claim: "Prendre",

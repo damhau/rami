@@ -263,16 +263,15 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </div>
         </div>
 
-        {/* table melds */}
+        {/* table melds — only shown once something is on the table */}
+        {snap.table_melds.length > 0 && (
         <div className="mt-4 md:mt-8">
-          <div className="mb-2 text-center text-[11px] uppercase tracking-wider text-slate-300/80">
-            {t.game.tableMelds}{" "}
-            {layOffMode && <span className="text-gold">{t.game.clickToLayOff}</span>}
-          </div>
+          {layOffMode && (
+            <div className="mb-2 text-center text-[11px] uppercase tracking-wider text-gold">
+              {t.game.clickToLayOff}
+            </div>
+          )}
           <div className="flex flex-wrap items-start justify-center gap-3">
-            {snap.table_melds.length === 0 && (
-              <div className="text-sm text-white/40">{t.game.noMelds}</div>
-            )}
             {snap.table_melds.map((meld) => {
               const hasJoker = meld.cards.some((c) => c.is_joker);
               const owner = snap.players.find((p) => p.seat === meld.owner_seat)?.name;
@@ -313,6 +312,7 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             })}
           </div>
         </div>
+        )}
 
         {/* free-card prompt */}
         {freeForMe && (

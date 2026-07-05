@@ -1,3 +1,9 @@
+## v0.5.0 (2026-07-05)
+
+### Feat
+
+- **ai**: stronger computer opponent
+
 ## v0.4.5 (2026-07-05)
 
 ### Fix

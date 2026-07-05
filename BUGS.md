@@ -1,0 +1,5 @@
+- [ ] drag and drop does not work in firefox on mac
+- [ ] when I scan a qr code the "join a game" should be hidden
+- [ ] On some brwoser the "table" is not "full screen" there is a scrollbar on the right, is this normal ?
+- [ ] the reponsive version does not "work" on the phone, it should be "full screen" and currently I have to scroll or zoom
+- [ ] the status "waiting..." is over the card on the table

@@ -22,6 +22,8 @@ body {
   color: #e2e8f0;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* Never let a stray wide element cause a horizontal scrollbar / mobile zoom. */
+  overflow-x: hidden;
 }
 
 /* ----------------------------------------------------------------- */

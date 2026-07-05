@@ -53,6 +53,7 @@ export interface PlayerView {
   connected: boolean;
   ready: boolean;
   is_turn: boolean;
+  is_bot: boolean;
 }
 
 export interface FreeCardView {

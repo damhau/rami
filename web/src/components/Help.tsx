@@ -39,17 +39,21 @@ export function HelpButton() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-ink p-6 shadow-2xl"
+            className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <h2 className="text-xl font-bold">Comment jouer au Rami Portugais</h2>
-              <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              <button
+                onClick={() => setOpen(false)}
+                aria-label="Fermer"
+                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white"
+              >
                 ✕
-              </Button>
+              </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto px-6 py-5">
               <Section title="But du jeu">
                 <p>
                   11 manches, une par contrat. À chaque manche, soyez le premier à vous débarrasser
@@ -119,6 +123,41 @@ export function HelpButton() {
                 <p>As = 11 · figures = 10 · joker en main = 25 · autres = leur valeur.</p>
                 <p>Celui qui sort marque 0 pour la manche. Plus bas total après 11 manches gagne.</p>
               </Section>
+
+              <Section title="Commandes en jeu">
+                <p>
+                  <b>Piocher</b> / <b>Prendre la défausse</b> : votre première action du tour.
+                </p>
+                <p>
+                  <b>Cliquez</b> vos cartes pour les sélectionner ; <b>glissez-les</b> pour
+                  réorganiser votre main.
+                </p>
+                <p>
+                  <b>Ajouter la combinaison</b> : le jeu devine s'il s'agit d'un brelan ou d'une
+                  suite et l'ajoute à la zone de préparation (qui affiche le total de points).
+                </p>
+                <p>
+                  <b>Sortir</b> / <b>Poser</b> : valide les combinaisons préparées (la sortie exige
+                  le contrat et ≥ 40 pts).
+                </p>
+                <p>
+                  <b>Compléter</b> : après être sorti, sélectionnez une carte puis cliquez une
+                  combinaison de la table pour l'y ajouter.
+                </p>
+                <p>
+                  <b>Récupérer un joker</b> : posez la carte exacte qu'il représente sur la
+                  combinaison ; le joker revient dans votre main.
+                </p>
+                <p>
+                  <b>Défausser</b> : termine votre tour.
+                </p>
+              </Section>
+
+              <div className="pt-1">
+                <Button className="w-full" onClick={() => setOpen(false)}>
+                  Fermer
+                </Button>
+              </div>
             </div>
           </div>
         </div>

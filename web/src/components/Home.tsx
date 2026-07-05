@@ -3,6 +3,7 @@ import { createTable, createSolo, joinTable } from "../lib/api";
 import { useStore } from "../store";
 import { t } from "../i18n";
 import { Button } from "./ui/button";
+import { VersionBadge } from "./VersionBadge";
 
 function codeFromUrl(): string {
   return (new URLSearchParams(location.search).get("t") ?? "").replace(/\D/g, "").slice(0, 4);
@@ -35,7 +36,7 @@ export function Home() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-[1100px] items-center px-4">
+    <div className="mx-auto flex min-h-screen min-h-dvh max-w-[1100px] items-center px-4">
       <div className="grid w-full gap-8 md:grid-cols-2">
         <div>
           <div className="mb-6 flex items-center gap-2 text-xl font-extrabold tracking-tight">
@@ -64,76 +65,92 @@ export function Home() {
             className="mt-1 w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-sm outline-none focus:border-gold/60"
           />
 
-          <Button
-            className="mt-5 w-full"
-            disabled={busy}
-            onClick={() => go(() => createTable(name.trim()))}
-          >
-            {t.home.create}
-          </Button>
+          {invited ? (
+            // Arrived via an invite link/QR: focus on joining that one table.
+            <>
+              <p className="mb-3 mt-4 text-sm text-gold">{t.home.invitedTo(code)}</p>
+              <Button
+                className="w-full"
+                disabled={busy || code.length !== 4}
+                onClick={() => go(() => joinTable(code.trim(), name.trim()))}
+              >
+                {t.home.joinTable(code)}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                className="mt-5 w-full"
+                disabled={busy}
+                onClick={() => go(() => createTable(name.trim()))}
+              >
+                {t.home.create}
+              </Button>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
-            <span className="h-px flex-1 bg-white/10" />
-            {t.home.orDivider}
-            <span className="h-px flex-1 bg-white/10" />
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-ink/40 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">{t.home.vsComputer}</span>
-              <div className="flex items-center gap-1">
-                <span className="mr-1 text-xs text-slate-400">{t.home.opponents}</span>
-                {[1, 2, 3].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setBots(n)}
-                    className={
-                      "h-7 w-7 rounded-md text-sm font-semibold " +
-                      (bots === n ? "bg-gold text-ink" : "bg-white/10 text-slate-300")
-                    }
-                  >
-                    {n}
-                  </button>
-                ))}
+              <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+                <span className="h-px flex-1 bg-white/10" />
+                {t.home.orDivider}
+                <span className="h-px flex-1 bg-white/10" />
               </div>
-            </div>
-            <Button
-              variant="outline"
-              className="mt-3 w-full"
-              disabled={busy}
-              onClick={() => go(() => createSolo(name.trim(), bots))}
-            >
-              {t.home.vsComputer}
-            </Button>
-          </div>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
-            <span className="h-px flex-1 bg-white/10" />
-            {t.home.orJoin}
-            <span className="h-px flex-1 bg-white/10" />
-          </div>
+              <div className="rounded-xl border border-white/10 bg-ink/40 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{t.home.vsComputer}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="mr-1 text-xs text-slate-400">{t.home.opponents}</span>
+                    {[1, 2, 3].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setBots(n)}
+                        className={
+                          "h-7 w-7 rounded-md text-sm font-semibold " +
+                          (bots === n ? "bg-gold text-ink" : "bg-white/10 text-slate-300")
+                        }
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="mt-3 w-full"
+                  disabled={busy}
+                  onClick={() => go(() => createSolo(name.trim(), bots))}
+                >
+                  {t.home.vsComputer}
+                </Button>
+              </div>
 
-          {invited && <p className="mb-2 text-sm text-gold">{t.home.invitedTo(code)}</p>}
-          <div className="flex items-stretch gap-2">
-            <input
-              value={code}
-              inputMode="numeric"
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
-              placeholder="1234"
-              className="w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-center text-lg font-mono tracking-[0.4em] outline-none focus:border-gold/60"
-            />
-            <Button
-              variant={invited ? "default" : "outline"}
-              disabled={busy || code.length !== 4}
-              onClick={() => go(() => joinTable(code.trim(), name.trim()))}
-            >
-              {t.home.join}
-            </Button>
-          </div>
+              <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+                <span className="h-px flex-1 bg-white/10" />
+                {t.home.orJoin}
+                <span className="h-px flex-1 bg-white/10" />
+              </div>
+
+              <div className="flex items-stretch gap-2">
+                <input
+                  value={code}
+                  inputMode="numeric"
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="1234"
+                  className="w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-center text-lg font-mono tracking-[0.4em] outline-none focus:border-gold/60"
+                />
+                <Button
+                  variant="outline"
+                  disabled={busy || code.length !== 4}
+                  onClick={() => go(() => joinTable(code.trim(), name.trim()))}
+                >
+                  {t.home.join}
+                </Button>
+              </div>
+            </>
+          )}
 
           {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
         </div>
       </div>
+      <VersionBadge className="fixed bottom-3 right-4 font-mono text-[11px] text-slate-600" />
     </div>
   );
 }

@@ -47,7 +47,10 @@ function SortableCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={cn(overlap && "-ml-3", isDragging && "touch-none")}
+      // select-none + draggable=false stop Firefox from starting a native
+      // text/image drag that would pre-empt dnd-kit's pointer drag.
+      draggable={false}
+      className={cn(overlap && "-ml-3", "select-none", isDragging && "touch-none")}
       {...attributes}
       {...listeners}
     >
@@ -152,7 +155,9 @@ export function GameTable({ snap }: { snap: Snapshot }) {
   return (
     <div className="flex flex-col gap-4">
       {/* ---------------- felt ---------------- */}
-      <div className="felt relative min-h-[420px] overflow-hidden rounded-3xl p-3 sm:p-4 md:min-h-[520px] md:p-6">
+      {/* pb-20 keeps the felt's flowing content (melds) clear of the absolute
+          status pill and free-card prompt pinned near the bottom. */}
+      <div className="felt relative min-h-[420px] overflow-hidden rounded-3xl px-3 pt-3 pb-20 sm:px-4 sm:pt-4 md:min-h-[520px] md:px-6 md:pt-6">
         {/* contract banner */}
         <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
           <div className="flex flex-wrap items-center justify-center gap-3 rounded-full border border-gold/30 bg-ink/70 px-4 py-1.5 backdrop-blur">
@@ -186,7 +191,13 @@ export function GameTable({ snap }: { snap: Snapshot }) {
                 <div className="leading-tight">
                   <div className="text-sm font-semibold">
                     {p.name}
-                    {!p.connected && <span className="ml-1 text-[10px] text-rose-300">{t.game.offline}</span>}
+                    {p.is_bot ? (
+                      <span className="ml-1 text-[10px] text-sky-300">🤖</span>
+                    ) : (
+                      !p.connected && (
+                        <span className="ml-1 text-[10px] text-rose-300">{t.game.offline}</span>
+                      )
+                    )}
                   </div>
                   <div className="text-[11px] text-slate-300">
                     {p.is_turn ? (

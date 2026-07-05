@@ -29,7 +29,14 @@ from .intents import (
     MeldSpec,
     PassFreeCard,
 )
-from .melds import MeldKind, cards_points, is_valid_run, is_valid_set, try_lay_off
+from .melds import (
+    MeldKind,
+    arrange_run,
+    cards_points,
+    is_valid_run,
+    is_valid_set,
+    try_lay_off,
+)
 from .state import GameState, Phase, PlayerState
 
 GO_OUT_MIN_POINTS = 40
@@ -107,6 +114,18 @@ def _all_candidates(cards: list[Card]) -> list[tuple[MeldKind, list[Card]]]:
     return _set_candidates(cards) + _run_candidates(cards)
 
 
+def _meld_points(kind: MeldKind, cards: list[Card]) -> int:
+    """Points the *engine* will credit for this meld. Runs must be scored on the
+    arranged order, because a joker's value depends on where it lands and the
+    engine re-orders runs with `arrange_run` (preferring the lowest start)."""
+    if kind == MeldKind.RUN:
+        arranged = arrange_run(cards)
+        if arranged is None:
+            return 0
+        return cards_points(arranged, MeldKind.RUN)
+    return cards_points(cards, kind)
+
+
 def _greedy_melds(cards: list[Card]) -> list[tuple[MeldKind, list[Card]]]:
     """Repeatedly pull the highest-value valid meld out of `cards`."""
     pool = list(cards)
@@ -115,7 +134,7 @@ def _greedy_melds(cards: list[Card]) -> list[tuple[MeldKind, list[Card]]]:
         cands = _all_candidates(pool)
         if not cands:
             break
-        best = max(cands, key=lambda kc: cards_points(kc[1], kc[0]))
+        best = max(cands, key=lambda kc: _meld_points(kc[0], kc[1]))
         result.append(best)
         used = {c.id for c in best[1]}
         pool = [c for c in pool if c.id not in used]
@@ -134,7 +153,7 @@ def _find_go_out(state: GameState, p: PlayerState) -> Intent | None:
     laid = [LaidMeld(kind=kind, length=len(cards)) for kind, cards in melds]
     if not satisfies_contract(contract_for(state.round_no), laid):
         return None
-    total = sum(cards_points(cards, kind) for kind, cards in melds)
+    total = sum(_meld_points(kind, cards) for kind, cards in melds)
     if total < GO_OUT_MIN_POINTS:
         return None
     specs = [MeldSpec(kind=kind, card_ids=[c.id for c in cards]) for kind, cards in melds]

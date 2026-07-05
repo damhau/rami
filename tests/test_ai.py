@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from conftest import C, D, H, S, card, two_player_state
-from rami.game.ai import next_bot_intent
-from rami.game.engine import apply
+from conftest import C, D, H, S, card, joker, two_player_state
+from rami.game.ai import _meld_points, next_bot_intent
+from rami.game.engine import apply, new_game, start_round
 from rami.game.intents import Discard, DrawStock, LayMelds
+from rami.game.melds import MeldKind, arrange_run, cards_points
 from rami.game.state import Phase
 
 
@@ -49,6 +50,31 @@ def test_bot_discards_when_it_cannot_go_out():
     g = two_player_state(_no_meld_filler(9), _no_meld_filler(9), round_no=1)  # await_discard
     intent = next_bot_intent(g, 0)
     assert isinstance(intent, Discard)
+
+
+def test_bot_scores_runs_like_the_engine():
+    # A joker in Q-K-? is valued by the engine as the Jack (cheapest arrangement),
+    # not the Ace. The bot must agree, or it will try an illegal go-out.
+    cards = [card(S, 12, 1), card(S, 13, 2), joker(3)]
+    arranged = arrange_run(cards)
+    assert arranged is not None
+    assert _meld_points(MeldKind.RUN, cards) == cards_points(arranged, MeldKind.RUN) == 30
+
+
+def test_bot_never_produces_an_illegal_move_across_many_deals():
+    # Regression for the ContractNotMet crash: drive all-bot rounds over many
+    # deals; applying a bot move must never raise.
+    for seed in range(80):
+        g = new_game(["A", "B", "C"], rng_seed=seed)
+        g, _ = start_round(g)
+        for _ in range(500):
+            if g.phase in (Phase.ROUND_OVER, Phase.GAME_OVER):
+                break
+            offer = g.free_card
+            seat = offer.pending_seats[0] if offer and offer.pending_seats else g.turn_seat
+            intent = next_bot_intent(g, seat)
+            assert intent is not None, (seed, g.phase)
+            g, _ = apply(g, intent)  # must not raise
 
 
 def test_bot_completes_a_full_turn_via_repeated_calls():

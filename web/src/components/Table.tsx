@@ -6,12 +6,13 @@ import { GameTable } from "./GameTable";
 import { Scoreboard } from "./Scoreboard";
 import { GameOverDialog, RoundOverDialog } from "./Dialogs";
 import { HelpButton } from "./Help";
+import { VersionBadge } from "./VersionBadge";
 
 export function Table() {
   const { snapshot, connected, error, leave, dismissError, session } = useStore();
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen min-h-dvh">
       {/* header */}
       <div className="sticky top-0 z-30 border-b border-white/10 bg-ink/80 backdrop-blur">
         <div className="mx-auto flex max-w-[1280px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
@@ -39,6 +40,7 @@ export function Table() {
             </span>
           </span>
           <div className="ml-auto flex items-center gap-1">
+            <VersionBadge className="hidden font-mono text-[11px] text-slate-500 sm:inline" />
             <HelpButton />
             <Button variant="ghost" size="sm" onClick={leave}>
               {t.table.leave}

@@ -43,8 +43,11 @@ def _build_all(session: GameSession) -> dict[int, dict[str, Any]]:
     assert session.state is not None
     connected = [s.connected for s in session.seats]
     ready = [s.ready for s in session.seats]
+    bots = [s.is_bot for s in session.seats]
     return {
-        p.seat: P.build_snapshot(session.code, session.state, p.seat, connected, ready).model_dump()
+        p.seat: P.build_snapshot(
+            session.code, session.state, p.seat, connected, ready, bots
+        ).model_dump()
         for p in session.state.players
     }
 

@@ -37,6 +37,7 @@ export const t = {
     orDivider: "ou",
     orJoin: "ou rejoindre",
     join: "Rejoindre",
+    joinTable: (code: string) => `Rejoindre la table ${code}`,
     invitedTo: (code: string) => `Vous êtes invité à la table ${code} — entrez votre nom pour rejoindre.`,
     needName: "Entrez d'abord un nom.",
     genericError: "Une erreur s'est produite.",

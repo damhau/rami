@@ -181,6 +181,7 @@ class PlayerView(BaseModel):
     connected: bool
     ready: bool
     is_turn: bool
+    is_bot: bool
 
 
 class FreeCardView(BaseModel):
@@ -284,7 +285,9 @@ def build_snapshot(
     seat: int,
     connected: list[bool],
     ready: list[bool],
+    bots: list[bool] | None = None,
 ) -> Snapshot:
+    bots = bots or []
     you = state.player(seat)
     players = [
         PlayerView(
@@ -297,6 +300,7 @@ def build_snapshot(
             connected=connected[p.seat] if p.seat < len(connected) else False,
             ready=ready[p.seat] if p.seat < len(ready) else False,
             is_turn=(state.phase in _TURN_PHASES and state.turn_seat == p.seat),
+            is_bot=bots[p.seat] if p.seat < len(bots) else False,
         )
         for p in state.players
     ]

@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #0b1220;
+  --color-gold: #e8c468;
+  --color-felt: #0f5132;
+  --color-felt-deep: #0a3d26;
+  --color-felt-edge: #072b1b;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink);
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ----------------------------------------------------------------- */
+/* Playing cards (ported from the design mockup)                      */
+/* ----------------------------------------------------------------- */
+
+.pcard {
+  /* Every dimension below is derived from --cw (card width), so the three
+     size tiers (md/sm/xs) are just different --cw values, and one media
+     query can shrink all cards on small screens. Ratios are taken from the
+     original fixed-pixel design so desktop looks identical. */
+  --cw: 64px;
+  position: relative;
+  width: var(--cw);
+  height: calc(var(--cw) * 1.4375);
+  border-radius: calc(var(--cw) * 0.14);
+  background: linear-gradient(180deg, #ffffff, #f3f4f6);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 6px 14px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: calc(var(--cw) * 0.08) calc(var(--cw) * 0.095);
+  user-select: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    outline-color 0.12s ease;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.pcard.sm {
+  --cw: 50px;
+}
+.pcard.xs {
+  --cw: 38px;
+}
+/* Shrink every card tier on phones so a full hand fits without an awkward
+   horizontal scroll; corners still show rank+suit under heavy overlap. */
+@media (max-width: 640px) {
+  .pcard {
+    --cw: 50px;
+  }
+  .pcard.sm {
+    --cw: 40px;
+  }
+  .pcard.xs {
+    --cw: 32px;
+  }
+}
+.pcard .corner {
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.pcard .corner.br {
+  transform: rotate(180deg);
+  align-self: flex-end;
+}
+.pcard .pip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--cw) * 0.4);
+  opacity: 0.92;
+}
+.pcard .rk {
+  font-size: calc(var(--cw) * 0.235);
+}
+.red {
+  color: #c81e1e;
+}
+.black {
+  color: #111827;
+}
+.pcard.joker {
+  background: linear-gradient(180deg, #1f2937, #0b1220);
+  color: var(--color-gold);
+  border-color: #3b3f52;
+  align-items: center;
+  justify-content: center;
+}
+.pcard.joker .pip {
+  color: var(--color-gold);
+}
+.pcard.back {
+  background: repeating-linear-gradient(45deg, #1b3a8f 0 6px, #16327c 6px 12px);
+  border: 1px solid #0c1b4a;
+}
+.pcard.back::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(232, 196, 104, 0.5);
+}
+.pcard.clickable {
+  cursor: pointer;
+}
+.pcard.clickable:hover {
+  transform: translateY(-10px);
+  z-index: 20;
+}
+.pcard.selected {
+  transform: translateY(-16px);
+  outline: 2px solid var(--color-gold);
+  outline-offset: 1px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.felt {
+  background: radial-gradient(
+    120% 90% at 50% 18%,
+    #137a47 0%,
+    var(--color-felt) 38%,
+    var(--color-felt-deep) 78%,
+    var(--color-felt-edge) 100%
+  );
+  box-shadow:
+    inset 0 0 0 2px rgba(232, 196, 104, 0.18),
+    inset 0 0 120px rgba(0, 0, 0, 0.45);
+}
+.turn-glow {
+  box-shadow:
+    0 0 0 2px var(--color-gold),
+    0 0 24px rgba(232, 196, 104, 0.45);
+}
+
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+}

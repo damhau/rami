@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rami Portugais — UI Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
+          colors: {
+            felt:    { DEFAULT: '#0f5132', deep: '#0a3d26', edge: '#072b1b' },
+            gold:    '#e8c468',
+            ink:     '#0b1220',
+          },
+          boxShadow: {
+            card: '0 1px 2px rgba(0,0,0,.25), 0 6px 14px rgba(0,0,0,.30)',
+            lift: '0 8px 24px rgba(0,0,0,.45)',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { background: #0b1220; }
+    /* --- Playing card --- */
+    .pcard{
+      position:relative; width:64px; height:92px; border-radius:9px;
+      background:linear-gradient(180deg,#ffffff,#f3f4f6);
+      box-shadow:0 1px 2px rgba(0,0,0,.25),0 6px 14px rgba(0,0,0,.30);
+      border:1px solid rgba(0,0,0,.10); color:#111827;
+      display:flex; flex-direction:column; justify-content:space-between;
+      padding:5px 6px; user-select:none; transition:transform .12s ease, box-shadow .12s ease;
+      font-variant-numeric:tabular-nums;
+    }
+    .pcard.sm{ width:50px; height:72px; border-radius:7px; padding:4px 5px; }
+    .pcard .corner{ font-weight:700; line-height:1; display:flex; flex-direction:column; align-items:center; gap:1px; }
+    .pcard .corner.br{ transform:rotate(180deg); align-self:flex-end; }
+    .pcard .pip{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:26px; opacity:.92; }
+    .pcard.sm .pip{ font-size:20px; }
+    .pcard .rk{ font-size:15px; }
+    .pcard.sm .rk{ font-size:12px; }
+    .red{ color:#c81e1e; }
+    .black{ color:#111827; }
+    .pcard.joker{ background:linear-gradient(180deg,#1f2937,#0b1220); color:#e8c468; border-color:#3b3f52; }
+    .pcard.joker .pip{ color:#e8c468; }
+    .pcard.back{
+      background:
+        repeating-linear-gradient(45deg,#1b3a8f 0 6px,#16327c 6px 12px);
+      border:1px solid #0c1b4a;
+    }
+    .pcard.back::after{
+      content:""; position:absolute; inset:5px; border-radius:6px;
+      border:1.5px solid rgba(232,196,104,.5);
+    }
+    .hand .pcard{ cursor:pointer; }
+    .hand .pcard:hover{ transform:translateY(-14px); box-shadow:var(--tw-shadow,0 8px 24px rgba(0,0,0,.45)); z-index:30; }
+    .pcard.selected{ transform:translateY(-18px); outline:2px solid #e8c468; outline-offset:1px; box-shadow:0 10px 26px rgba(0,0,0,.5); }
+    .felt{
+      background:
+        radial-gradient(120% 90% at 50% 18%, #137a47 0%, #0f5132 38%, #0a3d26 78%, #072b1b 100%);
+      box-shadow: inset 0 0 0 2px rgba(232,196,104,.18), inset 0 0 120px rgba(0,0,0,.45);
+    }
+    .seat-ring{ box-shadow:0 0 0 2px rgba(255,255,255,.08); }
+    .turn-glow{ box-shadow:0 0 0 2px #e8c468, 0 0 24px rgba(232,196,104,.45); }
+    .chip{ font-size:11px; letter-spacing:.02em; }
+    .tray-slot{ border:1.5px dashed rgba(232,196,104,.5); }
+    ::-webkit-scrollbar{ height:8px; width:8px; }
+    ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.15); border-radius:8px; }
+    .view{ display:none; }
+    .view.active{ display:block; }
+  </style>
+</head>
+<body class="font-sans text-slate-100 antialiased">
+
+  <!-- ===== App chrome / view switcher (mockup only) ===== -->
+  <div class="sticky top-0 z-50 border-b border-white/10 bg-ink/80 backdrop-blur">
+    <div class="mx-auto flex max-w-[1200px] items-center gap-3 px-4 py-2.5">
+      <div class="flex items-center gap-2 font-extrabold tracking-tight">
+        <span class="grid h-7 w-7 place-items-center rounded-md bg-gold text-ink">♣</span>
+        Rami<span class="text-gold">Portugais</span>
+      </div>
+      <span class="ml-1 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-slate-300">UI mockup</span>
+      <div class="ml-auto flex items-center gap-1 rounded-lg bg-white/5 p-1 text-sm">
+        <button data-view="home"   class="nav rounded-md px-3 py-1.5 text-slate-300 hover:text-white">Home</button>
+        <button data-view="table"  class="nav rounded-md px-3 py-1.5 text-slate-300 hover:text-white">Game table</button>
+        <button data-view="round"  class="nav rounded-md px-3 py-1.5 text-slate-300 hover:text-white">Round end</button>
+        <button data-view="over"   class="nav rounded-md px-3 py-1.5 text-slate-300 hover:text-white">Game over</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ HOME / LOBBY ============================ -->
+  <section id="view-home" class="view">
+    <div class="mx-auto grid max-w-[1100px] gap-6 px-4 py-10 md:grid-cols-2">
+      <!-- Left: hero + create/join -->
+      <div>
+        <h1 class="text-4xl font-extrabold leading-tight tracking-tight">
+          Play <span class="text-gold">Rami Portugais</span><br>online with friends.
+        </h1>
+        <p class="mt-3 max-w-md text-slate-300">
+          The 11-contract Portuguese Rummy. Create a table, share the code, and play
+          in real time — no account needed.
+        </p>
+
+        <div class="mt-7 rounded-2xl border border-white/10 bg-white/[.03] p-5 shadow-lift">
+          <label class="text-xs font-medium uppercase tracking-wide text-slate-400">Your name</label>
+          <input value="Damien" class="mt-1 w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-sm outline-none focus:border-gold/60" />
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2">
+            <button class="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink shadow hover:brightness-105">
+              + Create a table
+            </button>
+            <div class="flex items-stretch gap-2">
+              <input placeholder="RAMI-7F3K" class="w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-sm uppercase tracking-widest outline-none focus:border-gold/60" />
+              <button class="shrink-0 rounded-lg border border-white/15 px-3 py-2.5 text-sm font-semibold hover:bg-white/5">Join</button>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-slate-400">2–4 players · 11 rounds · lowest score wins.</p>
+        </div>
+      </div>
+
+      <!-- Right: a "table waiting" lobby card -->
+      <div class="rounded-2xl border border-white/10 bg-white/[.03] p-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs uppercase tracking-wide text-slate-400">Table code</div>
+            <div class="font-mono text-2xl font-bold tracking-widest text-gold">RAMI-7F3K</div>
+          </div>
+          <button class="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold hover:bg-white/5">Copy invite</button>
+        </div>
+
+        <div class="mt-5 text-xs uppercase tracking-wide text-slate-400">Players (3/4)</div>
+        <ul class="mt-2 space-y-2">
+          <li class="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+            <span class="grid h-8 w-8 place-items-center rounded-full bg-gold/20 text-gold font-bold">D</span>
+            <span class="font-medium">Damien</span>
+            <span class="chip ml-1 rounded-full bg-gold/15 px-2 py-0.5 text-gold">host</span>
+            <span class="ml-auto chip rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300">ready</span>
+          </li>
+          <li class="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+            <span class="grid h-8 w-8 place-items-center rounded-full bg-sky-500/20 text-sky-300 font-bold">M</span>
+            <span class="font-medium">Marta</span>
+            <span class="ml-auto chip rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-300">ready</span>
+          </li>
+          <li class="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+            <span class="grid h-8 w-8 place-items-center rounded-full bg-rose-500/20 text-rose-300 font-bold">J</span>
+            <span class="font-medium">João</span>
+            <span class="ml-auto chip rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300">choosing…</span>
+          </li>
+          <li class="flex items-center gap-3 rounded-lg border border-dashed border-white/10 px-3 py-2 text-slate-500">
+            <span class="grid h-8 w-8 place-items-center rounded-full border border-dashed border-white/15">＋</span>
+            Waiting for a player…
+          </li>
+        </ul>
+
+        <button class="mt-5 w-full rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:brightness-105">
+          Start game
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ GAME TABLE ============================ -->
+  <section id="view-table" class="view active">
+    <div class="mx-auto grid max-w-[1280px] gap-4 px-3 py-4 lg:grid-cols-[1fr_280px]">
+
+      <!-- ---- The felt + play area ---- -->
+      <div class="felt relative overflow-hidden rounded-3xl p-4 md:p-6" style="min-height:620px">
+
+        <!-- Contract banner -->
+        <div class="absolute left-1/2 top-3 z-10 -translate-x-1/2">
+          <div class="flex items-center gap-3 rounded-full border border-gold/30 bg-ink/70 px-4 py-1.5 backdrop-blur">
+            <span class="chip rounded-full bg-gold/15 px-2 py-0.5 font-semibold text-gold">Round 5 / 11</span>
+            <span class="text-sm font-semibold">Contract: 1 run of 4 + 1 triplet</span>
+            <span class="h-4 w-px bg-white/15"></span>
+            <span class="chip text-slate-300">go out with <b class="text-white">≥ 40 pts</b></span>
+          </div>
+        </div>
+
+        <!-- Opponents row -->
+        <div class="mt-12 flex items-start justify-center gap-10">
+          <!-- Opponent: Marta (their turn) -->
+          <div class="flex flex-col items-center">
+            <div class="seat-ring turn-glow flex items-center gap-2 rounded-xl bg-ink/55 px-3 py-2">
+              <span class="grid h-9 w-9 place-items-center rounded-full bg-sky-500/25 font-bold text-sky-200">M</span>
+              <div class="leading-tight">
+                <div class="text-sm font-semibold">Marta</div>
+                <div class="chip text-gold">● their turn</div>
+              </div>
+            </div>
+            <!-- fanned card backs -->
+            <div class="mt-2 flex">
+              <div class="pcard back sm"></div>
+              <div class="pcard back sm -ml-7"></div>
+              <div class="pcard back sm -ml-7"></div>
+              <div class="pcard back sm -ml-7"></div>
+              <div class="pcard back sm -ml-7"></div>
+            </div>
+            <div class="chip mt-1 text-slate-300">9 cards</div>
+          </div>
+
+          <!-- Opponent: João -->
+          <div class="flex flex-col items-center">
+            <div class="seat-ring flex items-center gap-2 rounded-xl bg-ink/55 px-3 py-2">
+              <span class="grid h-9 w-9 place-items-center rounded-full bg-rose-500/25 font-bold text-rose-200">J</span>
+              <div class="leading-tight">
+                <div class="text-sm font-semibold">João</div>
+                <div class="chip text-emerald-300">▣ went out</div>
+              </div>
+            </div>
+            <div class="mt-2 flex">
+              <div class="pcard back sm"></div>
+              <div class="pcard back sm -ml-7"></div>
+              <div class="pcard back sm -ml-7"></div>
+            </div>
+            <div class="chip mt-1 text-slate-300">3 cards</div>
+          </div>
+        </div>
+
+        <!-- Center: stock + discard -->
+        <div class="mt-8 flex items-center justify-center gap-8">
+          <div class="flex flex-col items-center gap-1">
+            <div class="relative">
+              <div class="pcard back"></div>
+              <div class="pcard back absolute -right-1 -top-1 -z-10"></div>
+              <div class="pcard back absolute -right-2 -top-2 -z-20"></div>
+            </div>
+            <span class="chip rounded-full bg-ink/60 px-2 py-0.5 text-slate-300">Stock · 41</span>
+          </div>
+
+          <div class="flex flex-col items-center gap-1">
+            <div class="rounded-xl ring-2 ring-gold/40 ring-offset-2 ring-offset-felt">
+              <div class="pcard"><div class="corner red"><span class="rk">Q</span><span>♥</span></div><div class="pip red">♥</div><div class="corner br red"><span class="rk">Q</span><span>♥</span></div></div>
+            </div>
+            <span class="chip rounded-full bg-ink/60 px-2 py-0.5 text-slate-300">Discard</span>
+          </div>
+        </div>
+
+        <!-- Table melds -->
+        <div class="mt-8">
+          <div class="chip mb-2 text-center uppercase tracking-wider text-slate-300/80">Melds on the table</div>
+          <div class="flex flex-wrap items-start justify-center gap-3">
+
+            <!-- João's run -->
+            <div class="rounded-xl bg-black/15 p-2">
+              <div class="flex">
+                <div class="pcard sm"><div class="corner black"><span class="rk">4</span><span>♠</span></div><div class="pip black">♠</div></div>
+                <div class="pcard sm -ml-4"><div class="corner black"><span class="rk">5</span><span>♠</span></div><div class="pip black">♠</div></div>
+                <div class="pcard sm -ml-4"><div class="corner black"><span class="rk">6</span><span>♠</span></div><div class="pip black">♠</div></div>
+                <div class="pcard sm -ml-4"><div class="corner black"><span class="rk">7</span><span>♠</span></div><div class="pip black">♠</div></div>
+              </div>
+              <div class="chip mt-1 text-center text-slate-400">João · run ♠</div>
+            </div>
+
+            <!-- João's triplet with a joker -->
+            <div class="rounded-xl bg-black/15 p-2">
+              <div class="flex">
+                <div class="pcard sm"><div class="corner red"><span class="rk">9</span><span>♥</span></div><div class="pip red">♥</div></div>
+                <div class="pcard sm -ml-4"><div class="corner red"><span class="rk">9</span><span>♦</span></div><div class="pip red">♦</div></div>
+                <div class="pcard sm joker -ml-4 items-center justify-center">
+                  <div class="pip" style="font-size:16px">★</div>
+                  <span class="chip absolute bottom-0.5 left-0 right-0 text-center text-[9px] text-gold/90">=9♠</span>
+                </div>
+              </div>
+              <div class="chip mt-1 text-center text-slate-400">João · triplet 9 <span class="text-gold">· joker=9♠</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Toast / turn hint -->
+        <div class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
+          <div class="rounded-full border border-white/10 bg-ink/85 px-4 py-1.5 text-sm text-slate-200 shadow-lift">
+            Waiting for <b>Marta</b> to play…
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- Right rail: scoreboard ---- -->
+      <aside class="flex flex-col gap-4">
+        <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold">Scoreboard</h3>
+            <span class="chip rounded-full bg-white/10 px-2 py-0.5 text-slate-300">after R4</span>
+          </div>
+          <table class="mt-3 w-full text-sm">
+            <thead class="text-slate-400">
+              <tr class="text-left"><th class="font-medium">Player</th><th class="text-right font-medium">R4</th><th class="text-right font-medium">Total</th></tr>
+            </thead>
+            <tbody>
+              <tr class="border-t border-white/5"><td class="py-1.5 font-medium text-gold">Damien</td><td class="text-right text-slate-300">0</td><td class="text-right font-semibold">14</td></tr>
+              <tr class="border-t border-white/5"><td class="py-1.5">Marta</td><td class="text-right text-slate-300">22</td><td class="text-right font-semibold">31</td></tr>
+              <tr class="border-t border-white/5"><td class="py-1.5">João</td><td class="text-right text-slate-300">35</td><td class="text-right font-semibold">58</td></tr>
+            </tbody>
+          </table>
+          <p class="mt-2 text-xs text-slate-400">Lowest total after round 11 wins.</p>
+        </div>
+
+        <div class="rounded-2xl border border-white/10 bg-white/[.03] p-4">
+          <h3 class="font-semibold">This round</h3>
+          <ul class="mt-2 space-y-1.5 text-sm text-slate-300">
+            <li class="flex justify-between"><span>Contract</span><span class="text-right">run 4 + triplet</span></li>
+            <li class="flex justify-between"><span>Min. to go out</span><span>40 pts</span></li>
+            <li class="flex justify-between"><span>Dealer</span><span>João</span></li>
+            <li class="flex justify-between"><span>Cards in hand</span><span>13</span></li>
+          </ul>
+        </div>
+
+        <div class="rounded-2xl border border-white/10 bg-white/[.03] p-3 text-xs text-slate-400">
+          <div class="mb-1 font-semibold text-slate-200">Log</div>
+          <div class="space-y-1">
+            <div>João laid a run ♠ (4-5-6-7) and went out-ready.</div>
+            <div>You drew from stock.</div>
+            <div>Marta took the discard (8♣) and melded.</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ---- Player dock: hand + action bar ---- -->
+    <div class="mx-auto max-w-[1280px] px-3 pb-6">
+      <div class="rounded-2xl border border-white/10 bg-white/[.04] p-3 md:p-4">
+
+        <!-- Meld staging tray (appears while building a meld) -->
+        <div class="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-gold/25 bg-ink/40 p-3">
+          <span class="chip rounded-full bg-gold/15 px-2 py-0.5 font-semibold text-gold">Meld tray</span>
+          <div class="flex items-center gap-1">
+            <div class="pcard sm"><div class="corner red"><span class="rk">K</span><span>♥</span></div><div class="pip red">♥</div></div>
+            <div class="pcard sm"><div class="corner black"><span class="rk">K</span><span>♣</span></div><div class="pip black">♣</div></div>
+            <div class="tray-slot grid h-[72px] w-[50px] place-items-center rounded-md text-gold/60 text-xl">＋</div>
+          </div>
+          <span class="text-sm text-slate-300">Triplet of K — <b class="text-amber-300">need 1 more</b> · 20 pts so far</span>
+          <button class="ml-auto rounded-lg border border-white/15 px-3 py-1.5 text-sm hover:bg-white/5">Clear</button>
+          <button class="rounded-lg bg-white/10 px-3 py-1.5 text-sm font-semibold text-slate-400" disabled>Lay down</button>
+        </div>
+
+        <div class="flex items-end justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="grid h-9 w-9 place-items-center rounded-full bg-gold/20 font-bold text-gold">D</span>
+            <div class="leading-tight">
+              <div class="text-sm font-semibold">Damien <span class="chip rounded-full bg-gold/15 px-2 py-0.5 text-gold">your turn</span></div>
+              <div class="chip text-slate-400">13 cards · hand value 96</div>
+            </div>
+          </div>
+          <div class="chip hidden text-slate-400 sm:block">drag to reorder · click to select · double-click to send to tray</div>
+        </div>
+
+        <!-- Hand -->
+        <div class="hand mt-3 flex items-end overflow-x-auto pb-2">
+          <div class="pcard"><div class="corner red"><span class="rk">A</span><span>♥</span></div><div class="pip red">♥</div><div class="corner br red"><span class="rk">A</span><span>♥</span></div></div>
+          <div class="pcard -ml-3"><div class="corner red"><span class="rk">3</span><span>♥</span></div><div class="pip red">♥</div></div>
+          <div class="pcard -ml-3"><div class="corner red"><span class="rk">4</span><span>♥</span></div><div class="pip red">♥</div></div>
+          <div class="pcard -ml-3 selected"><div class="corner red"><span class="rk">5</span><span>♥</span></div><div class="pip red">♥</div></div>
+          <div class="pcard -ml-3"><div class="corner black"><span class="rk">7</span><span>♠</span></div><div class="pip black">♠</div></div>
+          <div class="pcard -ml-3"><div class="corner black"><span class="rk">7</span><span>♣</span></div><div class="pip black">♣</div></div>
+          <div class="pcard -ml-3"><div class="corner red"><span class="rk">7</span><span>♦</span></div><div class="pip red">♦</div></div>
+          <div class="pcard -ml-3"><div class="corner black"><span class="rk">10</span><span>♠</span></div><div class="pip black">♠</div></div>
+          <div class="pcard -ml-3"><div class="corner black"><span class="rk">J</span><span>♣</span></div><div class="pip black">♣</div></div>
+          <div class="pcard -ml-3"><div class="corner black"><span class="rk">Q</span><span>♠</span></div><div class="pip black">♠</div></div>
+          <div class="pcard -ml-3"><div class="corner black"><span class="rk">K</span><span>♣</span></div><div class="pip black">♣</div></div>
+          <div class="pcard -ml-3"><div class="corner red"><span class="rk">2</span><span>♦</span></div><div class="pip red">♦</div></div>
+          <div class="pcard joker -ml-3 items-center justify-center"><div class="pip" style="font-size:20px">★</div><span class="chip absolute bottom-1 left-0 right-0 text-center text-[10px] text-gold/90">JOKER</span></div>
+        </div>
+
+        <!-- Action bar -->
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <button class="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink hover:brightness-105">Draw from stock</button>
+          <button class="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/5">Take discard (Q♥)</button>
+          <span class="mx-1 h-6 w-px bg-white/10"></span>
+          <button class="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/5">Meld selected</button>
+          <button class="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-slate-400" disabled>Lay off</button>
+          <button class="rounded-lg border border-emerald-400/40 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-400/10">Go out</button>
+          <button class="ml-auto rounded-lg bg-rose-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-500">Discard 5♥</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ROUND END ============================ -->
+  <section id="view-round" class="view">
+    <div class="mx-auto max-w-[640px] px-4 py-12">
+      <div class="rounded-2xl border border-white/10 bg-white/[.04] p-6 shadow-lift">
+        <div class="flex items-center gap-3">
+          <span class="grid h-10 w-10 place-items-center rounded-full bg-emerald-500/20 text-emerald-300 text-xl">▣</span>
+          <div>
+            <h2 class="text-xl font-bold">Round 5 finished</h2>
+            <p class="text-sm text-slate-300"><b class="text-gold">João</b> went out first and scores 0.</p>
+          </div>
+        </div>
+
+        <table class="mt-5 w-full text-sm">
+          <thead class="text-slate-400">
+            <tr class="text-left"><th class="font-medium">Player</th><th class="text-right font-medium">Cards left</th><th class="text-right font-medium">Round pts</th><th class="text-right font-medium">New total</th></tr>
+          </thead>
+          <tbody>
+            <tr class="border-t border-white/5"><td class="py-2 font-medium text-gold">João</td><td class="text-right text-slate-300">—</td><td class="text-right">0</td><td class="text-right font-semibold">58</td></tr>
+            <tr class="border-t border-white/5"><td class="py-2 font-medium">Damien</td><td class="text-right text-slate-300">2 (5♥, 7♠)</td><td class="text-right">12</td><td class="text-right font-semibold">26</td></tr>
+            <tr class="border-t border-white/5"><td class="py-2 font-medium">Marta</td><td class="text-right text-slate-300">4 (incl. joker)</td><td class="text-right">47</td><td class="text-right font-semibold">78</td></tr>
+          </tbody>
+        </table>
+
+        <div class="mt-5 flex items-center justify-between">
+          <p class="text-sm text-slate-400">Next contract (R6): <b class="text-white">2 runs of 4</b></p>
+          <button class="rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-ink hover:brightness-105">Continue to round 6</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ GAME OVER ============================ -->
+  <section id="view-over" class="view">
+    <div class="mx-auto max-w-[640px] px-4 py-12">
+      <div class="rounded-2xl border border-gold/30 bg-gradient-to-b from-gold/10 to-white/[.03] p-7 text-center shadow-lift">
+        <div class="text-5xl">🏆</div>
+        <h2 class="mt-2 text-2xl font-extrabold">Damien wins!</h2>
+        <p class="text-slate-300">Lowest total after 11 rounds.</p>
+
+        <div class="mx-auto mt-6 max-w-sm space-y-2 text-left">
+          <div class="flex items-center justify-between rounded-xl border border-gold/30 bg-gold/10 px-4 py-3">
+            <span class="flex items-center gap-2 font-semibold"><span class="text-gold">①</span> Damien</span>
+            <span class="font-bold">182</span>
+          </div>
+          <div class="flex items-center justify-between rounded-xl bg-white/5 px-4 py-3">
+            <span class="flex items-center gap-2"><span class="text-slate-400">②</span> Marta</span>
+            <span class="font-semibold">214</span>
+          </div>
+          <div class="flex items-center justify-between rounded-xl bg-white/5 px-4 py-3">
+            <span class="flex items-center gap-2"><span class="text-slate-400">③</span> João</span>
+            <span class="font-semibold">239</span>
+          </div>
+        </div>
+
+        <div class="mt-7 flex justify-center gap-3">
+          <button class="rounded-lg bg-gold px-5 py-2.5 text-sm font-semibold text-ink hover:brightness-105">Play again</button>
+          <button class="rounded-lg border border-white/15 px-5 py-2.5 text-sm font-semibold hover:bg-white/5">Back to home</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const views = ['home','table','round','over'];
+    function show(v){
+      views.forEach(x => document.getElementById('view-'+x).classList.toggle('active', x===v));
+      document.querySelectorAll('.nav').forEach(b =>
+        b.classList.toggle('bg-white/10', b.dataset.view===v) ||
+        b.classList.toggle('text-white', b.dataset.view===v));
+    }
+    document.querySelectorAll('.nav').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+    // simple select toggle on hand cards
+    document.querySelectorAll('.hand .pcard').forEach(c =>
+      c.addEventListener('click', () => c.classList.toggle('selected')));
+    show('table');
+  </script>
+</body>
+</html>

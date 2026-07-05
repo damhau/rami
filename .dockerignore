@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Node / frontend build artifacts (rebuilt inside the image)
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Tooling / VCS / docs not needed at runtime
+.git/
+.github/
+.playwright-mcp/
+*.log
+.env
+.env.*
+mockups/
+docs/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

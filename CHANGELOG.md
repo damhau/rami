@@ -1,3 +1,9 @@
+## v0.3.2 (2026-07-05)
+
+### Fix
+
+- compact the game screen on mobile
+
 ## v0.3.1 (2026-07-05)
 
 ### Fix

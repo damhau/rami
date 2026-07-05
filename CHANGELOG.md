@@ -1,3 +1,9 @@
+## v0.3.1 (2026-07-05)
+
+### Fix
+
+- full-screen mobile layout and a discard-pickup undo
+
 ## v0.3.0 (2026-07-05)
 
 ### Feat

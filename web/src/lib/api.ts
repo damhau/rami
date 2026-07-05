@@ -25,3 +25,14 @@ export function joinTable(code: string, name: string): Promise<JoinedTable> {
 export function createSolo(name: string, bots: number): Promise<JoinedTable> {
   return request<JoinedTable>("/api/v1/tables/solo", { name, bots });
 }
+
+export async function getVersion(): Promise<string> {
+  try {
+    const res = await fetch("/api/v1/version");
+    if (!res.ok) return "";
+    const data = (await res.json()) as { version?: string };
+    return data.version ?? "";
+  } catch {
+    return "";
+  }
+}

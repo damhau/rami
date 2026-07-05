@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from rami.api.v1 import api_router
-from rami.core.config import get_settings
+from rami.core.config import get_settings, get_version
 from rami.core.exceptions import register_exception_handlers
 from rami.core.logging import RequestLoggingMiddleware, configure_logging
 from rami.realtime.ws import router as ws_router
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="Rami Portugais", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Rami Portugais", version=get_version(), lifespan=lifespan)
 
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(
@@ -51,6 +51,10 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["meta"])
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/api/v1/version", tags=["meta"])
+    async def version() -> dict[str, str]:
+        return {"version": get_version()}
 
     # Serve the built SPA from "/" when configured (production / Docker). Mounted
     # last so /api, /ws and /health keep priority over the catch-all.

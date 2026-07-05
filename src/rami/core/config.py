@@ -1,8 +1,20 @@
 """Application settings, exposed through the cached `get_settings` dependency."""
 
 from functools import lru_cache
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@lru_cache
+def get_version() -> str:
+    """The app version, taken from the installed package metadata (which
+    hatchling derives from ``pyproject.toml``'s ``[project] version``)."""
+    try:
+        return _pkg_version("rami")
+    except PackageNotFoundError:  # pragma: no cover - only in a broken install
+        return "0.0.0"
 
 
 class Settings(BaseSettings):

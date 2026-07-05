@@ -31,6 +31,15 @@ def _create_table(client, name: str) -> dict:
     return r.json()
 
 
+def test_version_endpoint_reports_package_version():
+    from rami.core.config import get_version
+
+    with TestClient(create_app()) as client:
+        r = client.get("/api/v1/version")
+        assert r.status_code == 200
+        assert r.json() == {"version": get_version()}
+
+
 def test_create_and_join_table_rest():
     with TestClient(create_app()) as client:
         a = _create_table(client, "Alice")

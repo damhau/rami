@@ -415,31 +415,6 @@ export function GameTable({ snap }: { snap: Snapshot }) {
 
         {meldHint && <div className="mb-2 text-sm text-rose-300">{meldHint}</div>}
 
-        <div className="flex items-end justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-gold/20 font-bold text-gold">
-              {mine.name.charAt(0).toUpperCase()}
-            </span>
-            <div className="leading-tight">
-              <div className="text-sm font-semibold">
-                {mine.name}{" "}
-                {isMyTurn && (
-                  <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] text-gold">
-                    {t.game.yourTurnBadge}
-                  </span>
-                )}
-                {goneOut && (
-                  <span className="ml-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-300">
-                    {t.game.outBadge}
-                  </span>
-                )}
-              </div>
-              <div className="text-[11px] text-slate-400">{t.game.cards(snap.your_hand.length)}</div>
-            </div>
-          </div>
-          <div className="hidden text-[11px] text-slate-400 sm:block">{t.game.handHint}</div>
-        </div>
-
         {/* hand — pt-6 gives headroom so a selected/hovered card's upward
             lift (translateY -16px) isn't clipped: overflow-x-auto forces
             overflow-y to clip too, so the scroll box needs top padding. */}

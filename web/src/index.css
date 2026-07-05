@@ -26,6 +26,14 @@ body {
   overflow-x: hidden;
 }
 
+/* The game shell must equal the *visible* viewport so the pinned hand is always
+   on screen. 100vh on iOS includes the area behind the toolbar (too tall); the
+   dvh line overrides it where supported and falls back to vh otherwise. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* ----------------------------------------------------------------- */
 /* Playing cards (ported from the design mockup)                      */
 /* ----------------------------------------------------------------- */

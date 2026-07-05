@@ -15,8 +15,9 @@ export function Table() {
   const inGame = !!snapshot && snapshot.phase !== "lobby";
 
   return (
-    // Fixed to the viewport so the game is one screen; only inner regions scroll.
-    <div className="flex h-screen h-dvh flex-col overflow-hidden">
+    // Fixed to the *visible* viewport (see .app-shell) so the pinned hand is
+    // always on screen; only inner regions scroll.
+    <div className="app-shell flex flex-col overflow-hidden">
       {/* header */}
       <header
         className="shrink-0 border-b border-white/10 bg-ink/80 backdrop-blur"

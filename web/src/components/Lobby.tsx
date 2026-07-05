@@ -9,7 +9,6 @@ export function Lobby({ snap }: { snap: Snapshot }) {
   const send = useStore((s) => s.send);
   const me = snap.you;
   const isHost = me === 0;
-  const meReady = snap.players[me]?.ready ?? false;
   const canStart = snap.players.length >= 2;
   const [copied, setCopied] = useState(false);
 
@@ -66,14 +65,11 @@ export function Lobby({ snap }: { snap: Snapshot }) {
               {p.seat === me && <span className="text-[11px] text-slate-400">{t.lobby.you}</span>}
               <span
                 className={
-                  "ml-auto rounded-full px-2 py-0.5 text-[11px] " +
-                  (p.ready
-                    ? "bg-emerald-500/15 text-emerald-300"
-                    : "bg-white/10 text-slate-300")
+                  "ml-auto h-2.5 w-2.5 rounded-full " +
+                  (p.connected ? "bg-emerald-400" : "bg-slate-500")
                 }
-              >
-                {p.ready ? t.lobby.ready : t.lobby.notReady}
-              </span>
+                title={p.connected ? t.table.connected : t.table.connecting}
+              />
             </li>
           ))}
           {Array.from({ length: 4 - snap.players.length }).map((_, i) => (
@@ -89,28 +85,19 @@ export function Lobby({ snap }: { snap: Snapshot }) {
           ))}
         </ul>
 
-        <div className="mt-5 flex gap-2">
+        {isHost && (
           <Button
-            variant={meReady ? "outline" : "default"}
-            className="flex-1"
-            onClick={() => send({ type: "ready", ready: !meReady })}
+            className="mt-5 w-full"
+            disabled={!canStart}
+            onClick={() => send({ type: "start" })}
           >
-            {meReady ? t.lobby.imNotReady : t.lobby.imReady}
+            {t.lobby.start}
           </Button>
-          {isHost && (
-            <Button
-              className="flex-1"
-              disabled={!canStart}
-              onClick={() => send({ type: "start" })}
-            >
-              {t.lobby.start}
-            </Button>
-          )}
-        </div>
+        )}
         {isHost && !canStart && (
           <p className="mt-2 text-center text-xs text-slate-400">{t.lobby.needTwo}</p>
         )}
-        {!isHost && <p className="mt-2 text-center text-xs text-slate-400">{t.lobby.waitingHost}</p>}
+        {!isHost && <p className="mt-5 text-center text-xs text-slate-400">{t.lobby.waitingHost}</p>}
       </div>
     </div>
   );

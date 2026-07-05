@@ -1,5 +1,14 @@
 import type { JoinedTable } from "../types";
 
+/** An API failure that carries the server's stable error code for translation. */
+export class ApiError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 async function request<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
@@ -9,7 +18,7 @@ async function request<T>(url: string, body: unknown): Promise<T> {
   if (!res.ok) {
     const data = await res.json().catch(() => null);
     const message = data?.error?.message ?? `Request failed (${res.status})`;
-    throw new Error(message);
+    throw new ApiError(data?.error?.code ?? "app_error", message);
   }
   return res.json() as Promise<T>;
 }

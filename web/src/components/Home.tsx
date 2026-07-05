@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { createTable, createSolo, joinTable } from "../lib/api";
+import { ApiError, createTable, createSolo, joinTable } from "../lib/api";
 import { useStore } from "../store";
-import { t } from "../i18n";
+import { t, errorLabel } from "../i18n";
 import { Button } from "./ui/button";
 import { VersionBadge } from "./VersionBadge";
 
@@ -48,7 +48,7 @@ export function Home() {
       const joined = await action();
       enter({ code: joined.code, token: joined.token, you: joined.seat });
     } catch (e) {
-      setError(e instanceof Error ? e.message : t.home.genericError);
+      setError(e instanceof ApiError ? errorLabel(e.code) : t.home.genericError);
     } finally {
       setBusy(false);
     }

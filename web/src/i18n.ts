@@ -7,6 +7,22 @@ export function meldKindLabel(kind: MeldKind): string {
   return kind === "set" ? "brelan" : "suite";
 }
 
+// French messages for the server's stable error codes (the engine speaks English).
+const ERRORS: Record<string, string> = {
+  illegal_move: "Coup non autorisé.",
+  not_your_turn: "Ce n'est pas votre tour.",
+  contract_not_met: "Vos combinaisons ne remplissent pas le contrat (40 points minimum pour sortir).",
+  table_state: "Action impossible pour l'instant.",
+  table_full: "La table est complète.",
+  table_not_found: "Table introuvable.",
+  not_found: "Introuvable.",
+  bad_message: "Message invalide.",
+};
+
+export function errorLabel(code: string | undefined): string {
+  return (code && ERRORS[code]) || "Une erreur s'est produite.";
+}
+
 /** Build the round's contract label in French from its requirements. */
 export function contractLabel(requirements: ReqView[]): string {
   const parts = requirements.map((r) =>

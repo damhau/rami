@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ClientMessage, MeldKind, ServerMessage, Snapshot } from "./types";
-import { t } from "./i18n";
+import { t, errorLabel } from "./i18n";
 
 export interface Session {
   code: string;
@@ -131,7 +131,7 @@ export const useStore = create<StoreState>((set, get) => ({
         if (lines.length) set((st) => ({ log: [...lines.reverse(), ...st.log].slice(0, 40) }));
       } else if (msg.type === "error") {
         if (errorTimer) clearTimeout(errorTimer);
-        set({ error: msg.message });
+        set({ error: errorLabel(msg.code) });
         errorTimer = setTimeout(() => set({ error: null }), 4000);
       }
     };

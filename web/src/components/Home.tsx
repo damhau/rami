@@ -36,24 +36,26 @@ export function Home() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen min-h-dvh max-w-[1100px] items-start px-4 pt-6 sm:items-center sm:pt-0">
-      <div className="grid w-full gap-8 md:grid-cols-2">
+    <div className="app-shell-min mx-auto flex max-w-[1100px] items-start px-4 pt-6 sm:items-center sm:pt-0">
+      <div className="grid w-full gap-4 sm:gap-8 md:grid-cols-2">
         <div>
-          <div className="mb-6 flex items-center gap-2 text-xl font-extrabold tracking-tight">
+          <div className="mb-3 flex items-center gap-2 text-xl font-extrabold tracking-tight sm:mb-6">
             <span className="grid h-8 w-8 place-items-center rounded-md bg-gold text-ink">♣</span>
             {t.brand.rami}
             <span className="text-gold">{t.brand.suffix}</span>
           </div>
-          <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+          {/* Full marketing on tablet/desktop; on phones only a one-line tagline
+              so the whole create/join screen fits without scrolling. */}
+          <h1 className="hidden text-3xl font-extrabold leading-tight tracking-tight sm:block sm:text-4xl">
             {t.home.heroLead} <span className="text-gold">{t.home.heroName}</span>
             <br />
             {t.home.heroTail}
           </h1>
-          <p className="mt-3 max-w-md text-slate-300">{t.home.blurb}</p>
-          <p className="mt-3 text-xs text-slate-400">{t.home.meta}</p>
+          <p className="mt-3 hidden max-w-md text-slate-300 sm:block">{t.home.blurb}</p>
+          <p className="text-xs text-slate-400 sm:mt-3">{t.home.meta}</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-2xl">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-2xl sm:p-6">
           <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
             {t.home.yourName}
           </label>
@@ -80,14 +82,14 @@ export function Home() {
           ) : (
             <>
               <Button
-                className="mt-5 w-full"
+                className="mt-4 w-full sm:mt-5"
                 disabled={busy}
                 onClick={() => go(() => createTable(name.trim()))}
               >
                 {t.home.create}
               </Button>
 
-              <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+              <div className="my-3 flex items-center gap-3 text-xs text-slate-500 sm:my-5">
                 <span className="h-px flex-1 bg-white/10" />
                 {t.home.orDivider}
                 <span className="h-px flex-1 bg-white/10" />
@@ -122,7 +124,7 @@ export function Home() {
                 </Button>
               </div>
 
-              <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+              <div className="my-3 flex items-center gap-3 text-xs text-slate-500 sm:my-5">
                 <span className="h-px flex-1 bg-white/10" />
                 {t.home.orJoin}
                 <span className="h-px flex-1 bg-white/10" />

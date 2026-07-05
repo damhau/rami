@@ -34,6 +34,13 @@ body {
   height: 100dvh;
 }
 
+/* Like .app-shell but a floor, for pages that may grow (the home screen). Uses
+   dvh so it never forces the page taller than the visible viewport on iOS. */
+.app-shell-min {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* ----------------------------------------------------------------- */
 /* Playing cards (ported from the design mockup)                      */
 /* ----------------------------------------------------------------- */

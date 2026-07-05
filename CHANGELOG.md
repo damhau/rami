@@ -1,3 +1,9 @@
+## v0.3.4 (2026-07-05)
+
+### Fix
+
+- keep the hand on screen by sizing the shell to dvh
+
 ## v0.3.3 (2026-07-05)
 
 ### Fix

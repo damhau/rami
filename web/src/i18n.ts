@@ -3,8 +3,11 @@
 
 import type { MeldKind, ReqView } from "./types";
 
-export function meldKindLabel(kind: MeldKind): string {
-  return kind === "set" ? "brelan" : "suite";
+export function meldKindLabel(kind: MeldKind, length: number): string {
+  if (kind === "run") return "suite";
+  if (length <= 3) return "brelan"; // three of a kind
+  if (length === 4) return "carré"; // four of a kind
+  return "carré+"; // 5+ of a kind (possible with two decks)
 }
 
 // French messages for the server's stable error codes (the engine speaks English).

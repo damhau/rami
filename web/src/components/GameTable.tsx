@@ -295,7 +295,7 @@ export function GameTable({ snap }: { snap: Snapshot }) {
                   </div>
                   <div className="mt-1 flex items-center justify-center gap-2 text-[11px] text-slate-400">
                     <span>
-                      {owner} · {meldKindLabel(meld.kind)} · {meld.points} pts
+                      {owner} · {meldKindLabel(meld.kind, meld.cards.length)} · {meld.points} pts
                     </span>
                     {hasJoker && canAct && goneOut && selected.length === 1 && (
                       <button
@@ -391,7 +391,7 @@ export function GameTable({ snap }: { snap: Snapshot }) {
                   return card ? <PlayingCard key={id} card={card} size="xs" /> : null;
                 })}
                 <span className="px-1 text-[10px] uppercase text-slate-400">
-                  {meldKindLabel(g.kind)}
+                  {meldKindLabel(g.kind, g.card_ids.length)}
                 </span>
               </div>
             ))}

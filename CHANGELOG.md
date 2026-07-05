@@ -1,3 +1,9 @@
+## v0.4.3 (2026-07-05)
+
+### Fix
+
+- enable touch drag on mobile; portal the help modal
+
 ## v0.4.2 (2026-07-05)
 
 ### Fix

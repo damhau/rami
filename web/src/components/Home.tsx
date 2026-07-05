@@ -1,27 +1,33 @@
 import { useState } from "react";
 import { createTable, joinTable } from "../lib/api";
 import { useStore } from "../store";
+import { t } from "../i18n";
 import { Button } from "./ui/button";
+
+function codeFromUrl(): string {
+  return (new URLSearchParams(location.search).get("t") ?? "").replace(/\D/g, "").slice(0, 4);
+}
 
 export function Home() {
   const enter = useStore((s) => s.enter);
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(codeFromUrl);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const invited = code.length === 4;
 
   const go = async (action: () => Promise<{ code: string; token: string; seat: number }>) => {
     setError(null);
     if (!name.trim()) {
-      setError("Enter a display name first.");
+      setError(t.home.needName);
       return;
     }
     setBusy(true);
     try {
-      const t = await action();
-      enter({ code: t.code, token: t.token, you: t.seat });
+      const joined = await action();
+      enter({ code: joined.code, token: joined.token, you: joined.seat });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : t.home.genericError);
     } finally {
       setBusy(false);
     }
@@ -33,28 +39,26 @@ export function Home() {
         <div>
           <div className="mb-6 flex items-center gap-2 text-xl font-extrabold tracking-tight">
             <span className="grid h-8 w-8 place-items-center rounded-md bg-gold text-ink">♣</span>
-            Rami<span className="text-gold">Portugais</span>
+            {t.brand.rami}
+            <span className="text-gold">{t.brand.suffix}</span>
           </div>
-          <h1 className="text-4xl font-extrabold leading-tight tracking-tight">
-            Play <span className="text-gold">Rami Portugais</span>
+          <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+            {t.home.heroLead} <span className="text-gold">{t.home.heroName}</span>
             <br />
-            online with friends.
+            {t.home.heroTail}
           </h1>
-          <p className="mt-3 max-w-md text-slate-300">
-            The 11-contract Portuguese Rummy. Create a table, share the code, and play in real time —
-            no account needed.
-          </p>
-          <p className="mt-3 text-xs text-slate-400">2–4 players · 11 rounds · lowest score wins.</p>
+          <p className="mt-3 max-w-md text-slate-300">{t.home.blurb}</p>
+          <p className="mt-3 text-xs text-slate-400">{t.home.meta}</p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-2xl">
           <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
-            Your name
+            {t.home.yourName}
           </label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Damien"
+            placeholder={t.home.namePlaceholder}
             maxLength={24}
             className="mt-1 w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-sm outline-none focus:border-gold/60"
           />
@@ -64,28 +68,30 @@ export function Home() {
             disabled={busy}
             onClick={() => go(() => createTable(name.trim()))}
           >
-            + Create a table
+            {t.home.create}
           </Button>
 
           <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
             <span className="h-px flex-1 bg-white/10" />
-            or join
+            {t.home.orJoin}
             <span className="h-px flex-1 bg-white/10" />
           </div>
 
+          {invited && <p className="mb-2 text-sm text-gold">{t.home.invitedTo(code)}</p>}
           <div className="flex items-stretch gap-2">
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="RAMI-7F3K"
-              className="w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-sm uppercase tracking-widest outline-none focus:border-gold/60"
+              inputMode="numeric"
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="1234"
+              className="w-full rounded-lg border border-white/10 bg-ink/60 px-3 py-2.5 text-center text-lg font-mono tracking-[0.4em] outline-none focus:border-gold/60"
             />
             <Button
-              variant="outline"
-              disabled={busy || !code.trim()}
+              variant={invited ? "default" : "outline"}
+              disabled={busy || code.length !== 4}
               onClick={() => go(() => joinTable(code.trim(), name.trim()))}
             >
-              Join
+              {t.home.join}
             </Button>
           </div>
 

@@ -15,11 +15,12 @@ from rami.game.state import Event, GameState, Phase
 
 logger = logging.getLogger(__name__)
 
-_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no easily-confused chars
+CODE_LENGTH = 4
 
 
 def _new_code() -> str:
-    return "RAMI-" + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(4))
+    # A short, all-numeric code — easy to read aloud, type on a phone, or scan.
+    return "".join(secrets.choice("0123456789") for _ in range(CODE_LENGTH))
 
 
 @dataclass

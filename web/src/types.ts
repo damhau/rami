@@ -6,7 +6,6 @@ export type Phase =
   | "lobby"
   | "await_draw"
   | "await_discard"
-  | "free_card"
   | "round_over"
   | "game_over";
 

@@ -1,5 +1,8 @@
+import { useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import type { Snapshot } from "../types";
 import { useStore } from "../store";
+import { t } from "../i18n";
 import { Button } from "./ui/button";
 
 export function Lobby({ snap }: { snap: Snapshot }) {
@@ -8,26 +11,42 @@ export function Lobby({ snap }: { snap: Snapshot }) {
   const isHost = me === 0;
   const meReady = snap.players[me]?.ready ?? false;
   const canStart = snap.players.length >= 2;
+  const [copied, setCopied] = useState(false);
+
+  const inviteUrl = `${location.origin}${location.pathname}?t=${snap.code}`;
+  const copyLink = async () => {
+    await navigator.clipboard?.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4">
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">Table code</div>
-            <div className="font-mono text-2xl font-bold tracking-widest text-gold">{snap.code}</div>
+            <div className="text-xs uppercase tracking-wide text-slate-400">{t.lobby.tableCode}</div>
+            <div className="font-mono text-3xl font-bold tracking-[0.3em] text-gold">{snap.code}</div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigator.clipboard?.writeText(snap.code)}
-          >
-            Copy code
-          </Button>
+          <div className="flex flex-col gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(snap.code)}>
+              {t.lobby.copyCode}
+            </Button>
+            <Button variant="outline" size="sm" onClick={copyLink}>
+              {copied ? t.lobby.linkCopied : t.lobby.copyLink}
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col items-center gap-2 rounded-xl bg-white/5 p-4">
+          <div className="rounded-lg bg-white p-2.5">
+            <QRCodeSVG value={inviteUrl} size={132} />
+          </div>
+          <span className="text-xs text-slate-400">{t.lobby.scanToJoin}</span>
         </div>
 
         <div className="mt-5 text-xs uppercase tracking-wide text-slate-400">
-          Players ({snap.players.length}/4)
+          {t.lobby.players(snap.players.length)}
         </div>
         <ul className="mt-2 space-y-2">
           {snap.players.map((p) => (
@@ -41,10 +60,10 @@ export function Lobby({ snap }: { snap: Snapshot }) {
               <span className="font-medium">{p.name}</span>
               {p.seat === 0 && (
                 <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] text-gold">
-                  host
+                  {t.lobby.host}
                 </span>
               )}
-              {p.seat === me && <span className="text-[11px] text-slate-400">(you)</span>}
+              {p.seat === me && <span className="text-[11px] text-slate-400">{t.lobby.you}</span>}
               <span
                 className={
                   "ml-auto rounded-full px-2 py-0.5 text-[11px] " +
@@ -53,7 +72,7 @@ export function Lobby({ snap }: { snap: Snapshot }) {
                     : "bg-white/10 text-slate-300")
                 }
               >
-                {p.ready ? "ready" : "not ready"}
+                {p.ready ? t.lobby.ready : t.lobby.notReady}
               </span>
             </li>
           ))}
@@ -65,7 +84,7 @@ export function Lobby({ snap }: { snap: Snapshot }) {
               <span className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-white/15">
                 +
               </span>
-              Waiting for a player…
+              {t.lobby.waitingPlayer}
             </li>
           ))}
         </ul>
@@ -76,7 +95,7 @@ export function Lobby({ snap }: { snap: Snapshot }) {
             className="flex-1"
             onClick={() => send({ type: "ready", ready: !meReady })}
           >
-            {meReady ? "Not ready" : "I'm ready"}
+            {meReady ? t.lobby.imNotReady : t.lobby.imReady}
           </Button>
           {isHost && (
             <Button
@@ -84,16 +103,14 @@ export function Lobby({ snap }: { snap: Snapshot }) {
               disabled={!canStart}
               onClick={() => send({ type: "start" })}
             >
-              Start game
+              {t.lobby.start}
             </Button>
           )}
         </div>
         {isHost && !canStart && (
-          <p className="mt-2 text-center text-xs text-slate-400">
-            Need at least 2 players to start.
-          </p>
+          <p className="mt-2 text-center text-xs text-slate-400">{t.lobby.needTwo}</p>
         )}
-        {!isHost && <p className="mt-2 text-center text-xs text-slate-400">Waiting for the host…</p>}
+        {!isHost && <p className="mt-2 text-center text-xs text-slate-400">{t.lobby.waitingHost}</p>}
       </div>
     </div>
   );

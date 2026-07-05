@@ -1,9 +1,13 @@
-- ecran sur fifrefox mac trop petit
--il faut pouvoir deplacer les cartes
-- carte gratuite quand a 3 ou plus
-- traduction francais
-- the free card should be showed only until the other player has discarded
-- the triplet should be different (eg: not two 8 of spade and a 8 of heart)
-- the game should detect if it is a run or a set and just propose lay down
-- when the contract is "Contract 1 run of 4" and I try to get out I get the error "not a valid run", the run are always 3 card but the exception is when the contract is 1 run of 4 and the player get out
-- it seem the algorythm for the run does not work even in normal game wihtout the contract 1 run of 4, i try to do  KC, JC, QC but I get the error not a valid run
+- [x] ecran sur fifrefox mac trop petit
+- [x] il faut pouvoir deplacer les cartes
+- [x] carte gratuite quand a 3 ou plus
+- [x] traduction francais
+- [x] the free card should be showed only until the other player has discarded
+- [x] the triplet should be different (eg: not two 8 of spade and a 8 of heart)
+- [x] the game should detect if it is a run or a set and just propose lay down
+- [x] when the contract is "Contract 1 run of 4" and I try to get out I get the error "not a valid run", the run are always 3 card but the exception is when the contract is 1 run of 4 and the player get out
+- [x] it seem the algorythm for the run does not work even in normal game wihtout the contract 1 run of 4, i try to do  KC, JC, QC but I get the error not a valid run
+- [x] Responsive UI (phone, tablet)
+- [x] change the code to be only 4 digit
+- [x] add a button share link to game 
+- [x] add a qr code when game is created to join from mobile device

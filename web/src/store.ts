@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ClientMessage, MeldKind, ServerMessage, Snapshot } from "./types";
+import { t } from "./i18n";
 
 export interface Session {
   code: string;
@@ -25,14 +26,16 @@ interface StoreState {
   log: LogLine[];
   selected: number[];
   tray: TrayGroup[];
+  handOrder: number[];
 
   enter: (session: Session) => void;
   leave: () => void;
   send: (msg: ClientMessage) => void;
   toggleSelect: (id: number) => void;
   clearSelection: () => void;
-  addTrayGroup: (kind: MeldKind) => void;
+  addTrayGroup: (group: TrayGroup) => void;
   clearTray: () => void;
+  setHandOrder: (ids: number[]) => void;
   dismissError: () => void;
 }
 
@@ -48,32 +51,42 @@ function describe(snap: Snapshot | null, type: string, data: Record<string, unkn
   const who = (s: unknown) => seatName(snap, s as number);
   switch (type) {
     case "round_started":
-      return `Round ${data.round_no} started.`;
+      return t.event.roundStarted(data.round_no as number);
     case "drew":
       return data.source === "discard"
-        ? `${who(data.seat)} took the discard.`
-        : `${who(data.seat)} drew from the stock.`;
+        ? t.event.tookDiscard(who(data.seat))
+        : t.event.drewStock(who(data.seat));
     case "free_card_claimed":
-      return `${who(data.seat)} claimed the free card.`;
+      return t.event.freeClaimed(who(data.seat));
     case "free_card_passed":
-      return `${who(data.seat)} passed on the free card.`;
+      return t.event.freePassed(who(data.seat));
     case "went_out":
-      return `${who(data.seat)} went out!`;
+      return t.event.wentOut(who(data.seat));
     case "melded":
-      return `${who(data.seat)} laid a meld.`;
+      return t.event.melded(who(data.seat));
     case "laid_off":
-      return `${who(data.seat)} laid off a card.`;
+      return t.event.laidOff(who(data.seat));
     case "recovered_joker":
-      return `${who(data.seat)} recovered a joker.`;
+      return t.event.recoveredJoker(who(data.seat));
     case "discarded":
-      return `${who(data.seat)} discarded.`;
+      return t.event.discarded(who(data.seat));
     case "round_over":
-      return `Round ${data.round_no} over — ${who(data.winner_seat)} went out.`;
+      return t.event.roundOver(data.round_no as number, who(data.winner_seat));
     case "game_over":
-      return `Game over!`;
+      return t.event.gameOver;
     default:
       return null;
   }
+}
+
+/** Keep the player's chosen hand order stable across snapshots: retain the order
+ * for cards still in hand, append newly-drawn cards at the end. */
+function reconcileHandOrder(prev: number[], handIds: number[]): number[] {
+  const present = new Set(handIds);
+  const kept = prev.filter((id) => present.has(id));
+  const keptSet = new Set(kept);
+  const added = handIds.filter((id) => !keptSet.has(id));
+  return [...kept, ...added];
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -84,9 +97,10 @@ export const useStore = create<StoreState>((set, get) => ({
   log: [],
   selected: [],
   tray: [],
+  handOrder: [],
 
   enter: (session) => {
-    set({ session, snapshot: null, log: [], selected: [], tray: [] });
+    set({ session, snapshot: null, log: [], selected: [], tray: [], handOrder: [] });
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const url = `${proto}//${location.host}/ws/table/${session.code}?token=${session.token}`;
     socket?.close();
@@ -96,19 +110,21 @@ export const useStore = create<StoreState>((set, get) => ({
     socket.onmessage = (ev) => {
       const msg = JSON.parse(ev.data) as ServerMessage;
       if (msg.type === "snapshot") {
-        const handIds = new Set(msg.your_hand.map((c) => c.id));
+        const handIds = msg.your_hand.map((c) => c.id);
+        const handSet = new Set(handIds);
         set((st) => ({
           snapshot: msg,
-          selected: st.selected.filter((id) => handIds.has(id)),
+          selected: st.selected.filter((id) => handSet.has(id)),
+          handOrder: reconcileHandOrder(st.handOrder, handIds),
           tray: st.tray
-            .map((g) => ({ ...g, card_ids: g.card_ids.filter((id) => handIds.has(id)) }))
+            .map((g) => ({ ...g, card_ids: g.card_ids.filter((id) => handSet.has(id)) }))
             .filter((g) => g.card_ids.length > 0),
         }));
       } else if (msg.type === "events") {
         const snap = get().snapshot;
         const lines = msg.events
           .map((e) => describe(snap, e.type, e.data))
-          .filter((t): t is string => t !== null)
+          .filter((text): text is string => text !== null)
           .map((text) => ({ id: ++logCounter, text }));
         if (lines.length) set((st) => ({ log: [...lines.reverse(), ...st.log].slice(0, 40) }));
       } else if (msg.type === "error") {
@@ -122,7 +138,15 @@ export const useStore = create<StoreState>((set, get) => ({
   leave: () => {
     socket?.close();
     socket = null;
-    set({ session: null, snapshot: null, connected: false, selected: [], tray: [], log: [] });
+    set({
+      session: null,
+      snapshot: null,
+      connected: false,
+      selected: [],
+      tray: [],
+      handOrder: [],
+      log: [],
+    });
   },
 
   send: (msg) => {
@@ -138,16 +162,11 @@ export const useStore = create<StoreState>((set, get) => ({
 
   clearSelection: () => set({ selected: [] }),
 
-  addTrayGroup: (kind) =>
-    set((st) => {
-      if (st.selected.length < 3) return st;
-      return {
-        tray: [...st.tray, { kind, card_ids: st.selected }],
-        selected: [],
-      };
-    }),
+  addTrayGroup: (group) => set((st) => ({ tray: [...st.tray, group], selected: [] })),
 
   clearTray: () => set({ tray: [] }),
+
+  setHandOrder: (ids) => set({ handOrder: ids }),
 
   dismissError: () => set({ error: null }),
 }));

@@ -42,3 +42,21 @@ def two_player_state(
         turn_seat=turn,
         dealer_seat=(turn - 1) % 2,
     )
+
+
+def three_player_state(
+    hands: list[list[Card]],
+    *,
+    round_no: int = 1,
+    phase: Phase = Phase.AWAIT_DRAW,
+    turn: int = 0,
+) -> GameState:
+    names = ["A", "B", "C"]
+    players = [PlayerState(seat=i, name=names[i], hand=list(h)) for i, h in enumerate(hands)]
+    return GameState(
+        players=players,
+        phase=phase,
+        round_no=round_no,
+        turn_seat=turn,
+        dealer_seat=(turn - 1) % 3,
+    )

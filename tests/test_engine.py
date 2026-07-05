@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import C, D, H, S, card, joker, two_player_state
+from conftest import C, D, H, S, card, joker, three_player_state, two_player_state
 from rami.core.exceptions import ContractNotMet, IllegalMove, NotYourTurn
 from rami.game import engine
 from rami.game.engine import apply, new_game, start_round
@@ -95,38 +95,72 @@ def test_stock_reshuffles_from_discard_when_empty():
 # --------------------------------------------------------------------------- #
 
 
-def test_free_card_offered_and_claimed():
+def test_two_players_get_no_free_card_offer():
+    # With only 2 players the free-card chain does not apply (§3.7): drawing from
+    # stock goes straight to the discard step.
     g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
     g, _ = apply(g, DrawStock(0))
-    assert g.phase == Phase.FREE_CARD
-    assert g.free_card is not None
-    assert g.free_card.pending_seats == [1]
-    g, _ = apply(g, ClaimFreeCard(1))
     assert g.phase == Phase.AWAIT_DISCARD
+    assert g.free_card is None
+
+
+def test_free_card_offered_without_blocking_drawer():
+    g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]
+    g, _ = apply(g, DrawStock(0))
+    # The drawer proceeds to discard; the offer is open to the following seats.
+    assert g.phase == Phase.AWAIT_DISCARD
+    assert g.free_card is not None
+    assert g.free_card.pending_seats == [1, 2]
+
+
+def test_free_card_claimed_out_of_turn():
+    g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]
+    g, _ = apply(g, DrawStock(0))
+    g, _ = apply(g, ClaimFreeCard(1))  # seat 1 claims although it is seat 0's turn
     assert any(c.id == 2 for c in g.players[1].hand)
     assert g.discard == []
+    assert g.free_card is None
+    assert g.phase == Phase.AWAIT_DISCARD  # still the drawer's turn
 
 
-def test_free_card_passed_leaves_discard():
-    g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
+def test_free_card_passes_advance_then_expire():
+    g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
     g, _ = apply(g, DrawStock(0))
     g, _ = apply(g, PassFreeCard(1))
-    assert g.phase == Phase.AWAIT_DISCARD
-    assert g.discard[-1].id == 2
-    assert not any(c.id == 2 for c in g.players[1].hand)
+    assert g.free_card is not None
+    assert g.free_card.pending_seats == [2]
+    g, _ = apply(g, PassFreeCard(2))
+    assert g.free_card is None
+    assert g.discard[-1].id == 2  # nobody claimed — the card stays on the pile
+
+
+def test_free_card_offer_closes_when_drawer_discards():
+    g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]
+    g, _ = apply(g, DrawStock(0))
+    assert g.free_card is not None
+    g, _ = apply(g, Discard(0, 900))  # drawer ends the turn
+    assert g.free_card is None
+    with pytest.raises(IllegalMove):
+        apply(g, ClaimFreeCard(1))  # window is closed
 
 
 def test_wrong_seat_cannot_decide_free_card():
-    g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
+    g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
     g, _ = apply(g, DrawStock(0))
     with pytest.raises(IllegalMove):
-        apply(g, ClaimFreeCard(0))
+        apply(g, ClaimFreeCard(2))  # seat 2 must wait behind seat 1
 
 
 # --------------------------------------------------------------------------- #
@@ -173,6 +207,16 @@ def test_go_out_rejected_when_contract_kind_wrong():
     g = two_player_state(hand, _filler(13), round_no=2)
     with pytest.raises(ContractNotMet):
         apply(g, LayMelds(0, [MeldSpec(SET, [1, 2, 3, 4])]))
+
+
+def test_go_out_with_unordered_run_of_four_round2():
+    # Round 2 wants a run of 4; the client may send the ids in click order.
+    # 10-J-Q-K of spades = 40 points, passed out of order.
+    hand = [card(S, 13, 1), card(S, 11, 2), card(S, 10, 3), card(S, 12, 4), *_filler(9)]
+    g = two_player_state(hand, _filler(13), round_no=2)
+    g, _ = apply(g, LayMelds(0, [MeldSpec(RUN, [1, 2, 3, 4])]))
+    assert g.players[0].has_gone_out
+    assert [c.rank for c in g.table_melds[0].cards] == [10, 11, 12, 13]
 
 
 def test_go_out_with_joker_counts_represented_value():

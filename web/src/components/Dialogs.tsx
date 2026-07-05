@@ -1,5 +1,6 @@
 import type { Snapshot } from "../types";
 import { useStore } from "../store";
+import { t } from "../i18n";
 import { Button } from "./ui/button";
 
 function Overlay({ children }: { children: React.ReactNode }) {
@@ -24,9 +25,17 @@ export function RoundOverDialog({ snap }: { snap: Snapshot }) {
           ▣
         </span>
         <div>
-          <h2 className="text-xl font-bold">Round {snap.round_no} finished</h2>
+          <h2 className="text-xl font-bold">{t.dialogs.roundFinished(snap.round_no)}</h2>
           <p className="text-sm text-slate-300">
-            <b className="text-gold">{winner?.name}</b> went out and scores 0.
+            {(() => {
+              const [name, tail] = t.dialogs.wentOutScores0(winner?.name ?? "");
+              return (
+                <>
+                  <b className="text-gold">{name}</b>
+                  {tail}
+                </>
+              );
+            })()}
           </p>
         </div>
       </div>
@@ -34,9 +43,9 @@ export function RoundOverDialog({ snap }: { snap: Snapshot }) {
       <table className="mt-5 w-full text-sm">
         <thead className="text-slate-400">
           <tr className="text-left">
-            <th className="font-medium">Player</th>
-            <th className="text-right font-medium">Round</th>
-            <th className="text-right font-medium">Total</th>
+            <th className="font-medium">{t.dialogs.player}</th>
+            <th className="text-right font-medium">{t.dialogs.round}</th>
+            <th className="text-right font-medium">{t.dialogs.total}</th>
           </tr>
         </thead>
         <tbody>
@@ -52,9 +61,9 @@ export function RoundOverDialog({ snap }: { snap: Snapshot }) {
 
       <div className="mt-6 flex justify-end">
         {isHost ? (
-          <Button onClick={() => send({ type: "next_round" })}>Continue to next round</Button>
+          <Button onClick={() => send({ type: "next_round" })}>{t.dialogs.nextRound}</Button>
         ) : (
-          <p className="text-sm text-slate-400">Waiting for the host to start the next round…</p>
+          <p className="text-sm text-slate-400">{t.dialogs.waitingHostNext}</p>
         )}
       </div>
     </Overlay>
@@ -70,8 +79,8 @@ export function GameOverDialog({ snap }: { snap: Snapshot }) {
     <Overlay>
       <div className="text-center">
         <div className="text-5xl">🏆</div>
-        <h2 className="mt-2 text-2xl font-extrabold">{standings[0]?.name} wins!</h2>
-        <p className="text-slate-300">Lowest total after 11 rounds.</p>
+        <h2 className="mt-2 text-2xl font-extrabold">{t.dialogs.wins(standings[0]?.name ?? "")}</h2>
+        <p className="text-slate-300">{t.dialogs.lowestWins}</p>
       </div>
 
       <div className="mx-auto mt-6 max-w-sm space-y-2">
@@ -94,7 +103,7 @@ export function GameOverDialog({ snap }: { snap: Snapshot }) {
 
       <div className="mt-7 flex justify-center">
         <Button variant="outline" onClick={leave}>
-          Back to home
+          {t.dialogs.backHome}
         </Button>
       </div>
     </Overlay>

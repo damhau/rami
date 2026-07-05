@@ -15,7 +15,6 @@ class Phase(StrEnum):
     LOBBY = "lobby"
     AWAIT_DRAW = "await_draw"
     AWAIT_DISCARD = "await_discard"
-    FREE_CARD = "free_card"
     ROUND_OVER = "round_over"
     GAME_OVER = "game_over"
 

@@ -27,6 +27,8 @@ from .intents import (
 )
 from .melds import (
     Meld,
+    MeldKind,
+    arrange_run,
     cards_points,
     meld_points,
     repr_matches_card,
@@ -176,15 +178,16 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
     s.player(intent.seat).hand.append(card)
     events.append(Event("drew", {"seat": intent.seat, "source": "stock"}))
 
-    # Drawing from stock means refusing the visible discard: offer it around.
-    if s.num_players > 1 and s.discard:
+    # The drawer proceeds immediately — they are never blocked by the offer.
+    s.phase = Phase.AWAIT_DISCARD
+
+    # With 3+ players, drawing from stock refuses the visible discard, which the
+    # following players may then claim for free. The offer stays open (non-blocking)
+    # until the drawer discards, at which point it is dropped (§3.7).
+    if s.num_players >= 3 and s.discard:
         pending = [(intent.seat + k) % s.num_players for k in range(1, s.num_players)]
         s.free_card = FreeCardOffer(pending_seats=pending, resume_seat=intent.seat)
-        s.phase = Phase.FREE_CARD
         events.append(Event("free_card_offered", {"seats": list(pending)}))
-        _maybe_resolve_free_card(s, events)
-    else:
-        s.phase = Phase.AWAIT_DISCARD
 
 
 def _draw_discard(s: GameState, intent: DrawDiscard, events: list[Event]) -> None:
@@ -206,31 +209,26 @@ def _draw_discard(s: GameState, intent: DrawDiscard, events: list[Event]) -> Non
 # --------------------------------------------------------------------------- #
 
 
-def _maybe_resolve_free_card(s: GameState, events: list[Event]) -> None:
-    offer = s.free_card
-    if offer is None:
-        return
-    if not offer.pending_seats or not s.discard:
-        s.free_card = None
-        s.phase = Phase.AWAIT_DISCARD
-
-
 def _free_card_decision(s: GameState, seat: int, claim: bool, events: list[Event]) -> None:
     offer = s.free_card
-    if s.phase != Phase.FREE_CARD or offer is None:
+    if offer is None or not offer.pending_seats:
         raise IllegalMove("there is no free card to decide on")
-    if not offer.pending_seats or seat != offer.pending_seats[0]:
+    if seat != offer.pending_seats[0]:
         raise IllegalMove("it is not your free-card decision")
 
-    if claim and s.discard:
+    if claim:
+        if not s.discard:
+            raise IllegalMove("the free card is gone")
         card = s.discard.pop()
         s.player(seat).hand.append(card)
         events.append(Event("free_card_claimed", {"seat": seat, "card_id": card.id}))
-    else:
-        events.append(Event("free_card_passed", {"seat": seat}))
+        s.free_card = None  # a single card — claiming it ends the offer
+        return
 
+    events.append(Event("free_card_passed", {"seat": seat}))
     offer.pending_seats.pop(0)
-    _maybe_resolve_free_card(s, events)
+    if not offer.pending_seats:
+        s.free_card = None
 
 
 # --------------------------------------------------------------------------- #
@@ -260,6 +258,12 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
             seen.add(cid)
             cards.append(_hand_card(player, cid))
         validate_meld(spec.kind, cards)
+        if spec.kind == MeldKind.RUN:
+            # Accept the cards in any order; canonicalize the run so joker
+            # representations and the table display come out right.
+            arranged = arrange_run(cards)
+            assert arranged is not None  # validate_meld just passed
+            cards = arranged
         built.append(Meld(id=-1, kind=spec.kind, cards=cards, owner_seat=intent.seat))
 
     if not player.has_gone_out:
@@ -372,6 +376,8 @@ def _discard(s: GameState, intent: Discard, events: list[Event]) -> None:
     if s.taken_from_discard_id is not None:
         raise IllegalMove("you must lay the card taken from the discard before discarding")
     player = s.player(intent.seat)
+    # Discarding ends the turn, closing any still-open free-card offer (§3.7).
+    s.free_card = None
     card = _take_from_hand(player, intent.card_id)
     s.discard.append(card)
     events.append(Event("discarded", {"seat": intent.seat, "card_id": card.id}))

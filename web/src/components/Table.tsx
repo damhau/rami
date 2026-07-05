@@ -1,4 +1,5 @@
 import { useStore } from "../store";
+import { t } from "../i18n";
 import { Button } from "./ui/button";
 import { Lobby } from "./Lobby";
 import { GameTable } from "./GameTable";
@@ -12,12 +13,13 @@ export function Table() {
     <div className="min-h-screen">
       {/* header */}
       <div className="sticky top-0 z-30 border-b border-white/10 bg-ink/80 backdrop-blur">
-        <div className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 py-2.5">
-          <div className="flex items-center gap-2 font-extrabold tracking-tight">
+        <div className="mx-auto flex max-w-[1280px] items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
+          <div className="flex shrink-0 items-center gap-2 text-sm font-extrabold tracking-tight sm:text-base">
             <span className="grid h-7 w-7 place-items-center rounded-md bg-gold text-ink">♣</span>
-            Rami<span className="text-gold">Portugais</span>
+            {t.brand.rami}
+            <span className="text-gold">{t.brand.suffix}</span>
           </div>
-          <span className="rounded-full border border-white/15 px-2 py-0.5 font-mono text-xs tracking-widest text-gold">
+          <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 font-mono text-xs tracking-widest text-gold">
             {session?.code}
           </span>
           <span
@@ -31,10 +33,12 @@ export function Table() {
                 "h-2 w-2 rounded-full " + (connected ? "bg-emerald-400" : "bg-rose-400")
               }
             />
-            <span className="hidden sm:inline">{connected ? "connected" : "connecting…"}</span>
+            <span className="hidden sm:inline">
+              {connected ? t.table.connected : t.table.connecting}
+            </span>
           </span>
           <Button variant="ghost" size="sm" className="ml-auto" onClick={leave}>
-            Leave
+            {t.table.leave}
           </Button>
         </div>
       </div>
@@ -43,12 +47,12 @@ export function Table() {
       <div className="mx-auto max-w-[1280px] px-3 py-4">
         {!snapshot ? (
           <div className="flex min-h-[60vh] items-center justify-center text-slate-400">
-            Connecting to the table…
+            {t.table.connectingTable}
           </div>
         ) : snapshot.phase === "lobby" ? (
           <Lobby snap={snapshot} />
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
             <GameTable snap={snapshot} />
             <Scoreboard snap={snapshot} />
           </div>

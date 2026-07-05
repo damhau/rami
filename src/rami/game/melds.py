@@ -78,17 +78,24 @@ def set_rank(cards: list[Card]) -> int | None:
 def is_valid_set(cards: list[Card]) -> bool:
     if len(cards) < 3:
         return False
-    real, _ = _split(cards)
+    real, jokers = _split(cards)
     if not real:
         return False
     if set_rank(cards) is None:
         return False
-    # No more copies of a suit than there are decks.
     per_suit: dict[Suit, int] = {}
     for c in real:
         assert c.suit is not None
         per_suit[c.suit] = per_suit.get(c.suit, 0) + 1
+        # No more copies of a suit than there are decks.
         if per_suit[c.suit] > NUM_DECKS:
+            return False
+    # A second copy of a suit (a 2nd-deck card) is only legal once every suit is
+    # already present — a triplet fills the four distinct suits first, then grows
+    # with second-deck copies (DESIGN.md §3.9). Jokers can fill the missing suits.
+    if any(count >= 2 for count in per_suit.values()):
+        present = len(per_suit)
+        if present + len(jokers) < len(ALL_SUITS):
             return False
     return True
 
@@ -142,13 +149,70 @@ def _run_start(cards: list[Card]) -> int | None:
     return min(valid)
 
 
-def is_valid_run(cards: list[Card]) -> bool:
+def arrange_run(cards: list[Card]) -> list[Card] | None:
+    """Order `cards` into a valid run regardless of input order, or None.
+
+    Real cards go at their rank (an Ace may be low or high); jokers fill the
+    remaining slots. Returns the left-to-right sequence so joker representations
+    come out right. This makes runs order-independent: the caller may pass cards
+    in any order (e.g. click order from the UI).
+    """
     if len(cards) < 3:
-        return False
-    real, _ = _split(cards)
-    if not real:
-        return False
-    return _run_start(cards) is not None
+        return None
+    real, jokers = _split(cards)
+    if not real or run_suit(cards) is None:
+        return None
+
+    n = len(cards)
+    aces = [c for c in real if c.rank == RANK_ACE]
+    fixed = [c for c in real if c.rank != RANK_ACE]
+
+    # Try every low/high assignment for the aces (there are very few).
+    for hi_mask in range(2 ** len(aces)):
+        by_rank: dict[int, Card] = {}
+        collision = False
+        for c in fixed:
+            assert c.rank is not None
+            if c.rank in by_rank:
+                collision = True  # two reals share a rank — not a run
+                break
+            by_rank[c.rank] = c
+        for i, c in enumerate(aces):
+            if collision:
+                break
+            rank = RANK_ACE_HIGH if (hi_mask >> i) & 1 else RANK_ACE
+            if rank in by_rank:
+                collision = True
+                break
+            by_rank[rank] = c
+        if collision:
+            continue
+
+        ranks = sorted(by_rank)
+        lo, hi = ranks[0], ranks[-1]
+        # The window [start, start+n-1] must contain every real rank, stay within
+        # bounds, and not span both Ace ends. Prefer the lowest valid start.
+        for start in range(max(MIN_RANK, hi - n + 1), min(lo, RANK_ACE_HIGH - n + 1) + 1):
+            end = start + n - 1
+            if start == MIN_RANK and end == RANK_ACE_HIGH:
+                continue  # full circle / both Ace ends — not allowed
+            seq: list[Card] = []
+            spare = list(jokers)
+            for rank in range(start, end + 1):
+                if rank in by_rank:
+                    seq.append(by_rank[rank])
+                elif spare:
+                    seq.append(spare.pop(0))
+                else:
+                    seq = []
+                    break
+            if seq and not spare:
+                return seq
+    return None
+
+
+def is_valid_run(cards: list[Card]) -> bool:
+    return arrange_run(cards) is not None
 
 
 def is_valid_meld(kind: MeldKind, cards: list[Card]) -> bool:
@@ -247,8 +311,5 @@ def try_lay_off(meld: Meld, card: Card) -> list[Card] | None:
     if meld.kind == MeldKind.SET:
         candidate = [*meld.cards, card]
         return candidate if is_valid_set(candidate) else None
-    # Run: try both ends.
-    for candidate in ([card, *meld.cards], [*meld.cards, card]):
-        if is_valid_run(candidate):
-            return candidate
-    return None
+    # Run: re-order the combined cards so the result stays a valid sequence.
+    return arrange_run([*meld.cards, card])

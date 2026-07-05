@@ -37,9 +37,23 @@ def test_set_validity():
     assert is_valid_set([card(S, 7), card(H, 7), card(D, 7)])
     assert not is_valid_set([card(S, 7), card(H, 8), card(D, 7)])  # mixed rank
     assert not is_valid_set([card(S, 7), card(H, 7)])  # too short
-    # Two decks allow two of the same suit; three of one suit is too many.
-    assert is_valid_set([card(S, 7), card(S, 7), card(H, 7)])
-    assert not is_valid_set([card(S, 7), card(S, 7), card(S, 7)])
+    assert not is_valid_set([card(S, 7), card(S, 7), card(S, 7)])  # 3x one suit
+
+
+def test_set_duplicate_suit_requires_all_suits_present():
+    # A 2nd-deck copy of a suit is only legal once all four suits are present
+    # (DESIGN.md §3.9). A bare triplet with a duplicate suit is invalid.
+    assert not is_valid_set([card(S, 8), card(S, 8), card(H, 8)])
+    # Once all four suits are down, a second-deck copy is fine.
+    assert is_valid_set(
+        [card(S, 7), card(H, 7), card(D, 7), card(C, 7), card(S, 7)]
+    )
+    # A joker can stand in for a missing suit, unlocking the double.
+    assert is_valid_set(
+        [card(S, 6), card(S, 6), card(H, 6), card(D, 6), joker()]
+    )
+    # ...but not when suits are still missing (joker only covers one).
+    assert not is_valid_set([card(S, 8), card(S, 8), card(H, 8), joker()])
 
 
 def test_run_validity_and_ace_rules():
@@ -49,6 +63,26 @@ def test_run_validity_and_ace_rules():
     assert is_valid_run([card(C, 1), card(C, 2), card(C, 3)])  # A-2-3
     assert is_valid_run([card(H, 12), card(H, 13), card(H, 1)])  # Q-K-A
     assert not is_valid_run([card(C, 13), card(C, 1), card(C, 2)])  # K-A-2 wrap
+
+
+def test_run_validity_is_order_independent():
+    # Cards may arrive in any order (e.g. UI click order).
+    assert is_valid_run([card(C, 13), card(C, 11), card(C, 12)])  # K J Q -> J Q K
+    assert is_valid_run([card(S, 6), card(S, 4), card(S, 5)])
+    assert not is_valid_run([card(S, 6), card(S, 4), card(S, 4)])  # dup rank
+
+
+def test_arrange_run_orders_cards():
+    from rami.game.melds import arrange_run
+
+    seq = arrange_run([card(C, 13, 1), card(C, 11, 2), card(C, 12, 3)])
+    assert seq is not None
+    assert [c.rank for c in seq] == [11, 12, 13]
+    # Joker slotted into the gap even when passed out of order.
+    seq = arrange_run([card(S, 6, 4), card(S, 4, 5), joker(6)])
+    assert seq is not None
+    assert [c.id for c in seq] == [5, 6, 4]  # 4S, joker(=5S), 6S
+    assert arrange_run([card(S, 4), card(H, 5), card(S, 6)]) is None  # mixed suit
 
 
 def test_run_with_joker_filling_gap():

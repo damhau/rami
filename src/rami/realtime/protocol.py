@@ -275,7 +275,7 @@ def _contract_view(state: GameState) -> ContractView | None:
     )
 
 
-_TURN_PHASES = {Phase.AWAIT_DRAW, Phase.AWAIT_DISCARD, Phase.FREE_CARD}
+_TURN_PHASES = {Phase.AWAIT_DRAW, Phase.AWAIT_DISCARD}
 
 
 def build_snapshot(

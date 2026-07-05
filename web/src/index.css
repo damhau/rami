@@ -62,8 +62,21 @@ body {
 .pcard.xs {
   --cw: 38px;
 }
-/* Shrink every card tier on phones so a full hand fits without an awkward
-   horizontal scroll; corners still show rank+suit under heavy overlap. */
+/* Small laptops / tablets (e.g. Firefox on a 13" Mac): trim the card tiers a
+   little so the felt and a full hand fit without the layout feeling cramped. */
+@media (max-width: 1024px) {
+  .pcard {
+    --cw: 56px;
+  }
+  .pcard.sm {
+    --cw: 46px;
+  }
+  .pcard.xs {
+    --cw: 36px;
+  }
+}
+/* Shrink every card tier further on phones so a full hand fits without an
+   awkward horizontal scroll; corners still show rank+suit under heavy overlap. */
 @media (max-width: 640px) {
   .pcard {
     --cw: 50px;

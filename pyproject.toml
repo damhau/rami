@@ -21,6 +21,7 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.6",
     "mypy>=1.11",
+    "commitizen>=3.29",
 ]
 
 [build-system]
@@ -29,6 +30,21 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rami"]
+
+
+# ---------------------------------------------------------------------
+# Commitizen — conventional commits + version bump/tag (v-prefixed tags
+# drive .github/workflows/docker-publish.yml)
+# ---------------------------------------------------------------------
+
+[tool.commitizen]
+version = "0.1.2"
+tag_format = "v$major.$minor.$patch$prerelease"
+bump_message = "release $current_version -> $new_version [skip ci]"
+changelog_file = "CHANGELOG.md"
+version_files = [
+    "pyproject.toml:^version",
+]
 
 
 # ---------------------------------------------------------------------

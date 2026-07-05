@@ -11,7 +11,7 @@ import {
 import {
   SortableContext,
   arrayMove,
-  horizontalListSortingStrategy,
+  rectSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -50,7 +50,7 @@ function SortableCard({
       // select-none + draggable=false stop Firefox from starting a native
       // text/image drag that would pre-empt dnd-kit's pointer drag.
       draggable={false}
-      className={cn(overlap && "-ml-3", "select-none", isDragging && "touch-none")}
+      className={cn(overlap && "sm:-ml-3", "select-none", isDragging && "touch-none")}
       {...attributes}
       {...listeners}
     >
@@ -415,8 +415,10 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             lift (translateY -16px) isn't clipped: overflow-x-auto forces
             overflow-y to clip too, so the scroll box needs top padding. */}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={hand.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
-            <div className="mt-3 flex items-end overflow-x-auto pt-6 pb-2">
+          <SortableContext items={hand.map((c) => c.id)} strategy={rectSortingStrategy}>
+            {/* Phones: wrap to as many rows as needed so the whole hand is
+                visible without horizontal scrolling. Desktop: one fanned row. */}
+            <div className="mt-3 flex flex-wrap items-end justify-center gap-x-1 gap-y-3 pt-6 pb-2 sm:flex-nowrap sm:justify-start sm:gap-0 sm:overflow-x-auto">
               {hand.map((c, i) => (
                 <SortableCard
                   key={c.id}

@@ -1,3 +1,9 @@
+## v0.5.2 (2026-07-05)
+
+### Fix
+
+- drop the pointless "ready" button from the lobby
+
 ## v0.5.1 (2026-07-05)
 
 ### Fix

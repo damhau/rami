@@ -1,3 +1,9 @@
+## v0.3.6 (2026-07-05)
+
+### Fix
+
+- fit the welcome screen on phones without scrolling
+
 ## v0.3.5 (2026-07-05)
 
 ### Fix

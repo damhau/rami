@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createTable, joinTable } from "../lib/api";
+import { createTable, createSolo, joinTable } from "../lib/api";
 import { useStore } from "../store";
 import { t } from "../i18n";
 import { Button } from "./ui/button";
@@ -14,6 +14,7 @@ export function Home() {
   const [code, setCode] = useState(codeFromUrl);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bots, setBots] = useState(1);
   const invited = code.length === 4;
 
   const go = async (action: () => Promise<{ code: string; token: string; seat: number }>) => {
@@ -70,6 +71,41 @@ export function Home() {
           >
             {t.home.create}
           </Button>
+
+          <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
+            <span className="h-px flex-1 bg-white/10" />
+            {t.home.orDivider}
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-ink/40 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">{t.home.vsComputer}</span>
+              <div className="flex items-center gap-1">
+                <span className="mr-1 text-xs text-slate-400">{t.home.opponents}</span>
+                {[1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setBots(n)}
+                    className={
+                      "h-7 w-7 rounded-md text-sm font-semibold " +
+                      (bots === n ? "bg-gold text-ink" : "bg-white/10 text-slate-300")
+                    }
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="mt-3 w-full"
+              disabled={busy}
+              onClick={() => go(() => createSolo(name.trim(), bots))}
+            >
+              {t.home.vsComputer}
+            </Button>
+          </div>
 
           <div className="my-5 flex items-center gap-3 text-xs text-slate-500">
             <span className="h-px flex-1 bg-white/10" />

@@ -30,6 +30,7 @@ class Seat:
     token: str
     connected: bool = False
     ready: bool = False
+    is_bot: bool = False
 
 
 @dataclass
@@ -49,16 +50,22 @@ class GameSession:
     def host_token(self) -> str:
         return self.seats[0].token if self.seats else ""
 
-    def add_player(self, name: str) -> Seat:
+    def add_player(self, name: str, *, is_bot: bool = False) -> Seat:
         if self.state is not None and self.state.phase != Phase.LOBBY:
             raise TableState("the game has already started")
         if len(self.seats) >= self.max_players:
             raise TableFull()
-        seat = Seat(seat=len(self.seats), name=name, token=secrets.token_urlsafe(16))
+        seat = Seat(
+            seat=len(self.seats), name=name, token=secrets.token_urlsafe(16), is_bot=is_bot
+        )
         self.seats.append(seat)
         self._rebuild_lobby_state()
         logger.info("table.player_joined", extra={"code": self.code, "seat": seat.seat})
         return seat
+
+    @property
+    def has_bots(self) -> bool:
+        return any(s.is_bot for s in self.seats)
 
     def _rebuild_lobby_state(self) -> None:
         self.state = engine.new_game([s.name for s in self.seats], rng_seed=self.seed)
@@ -123,6 +130,17 @@ class TableManager:
         self._tables[code] = session
         host = session.add_player(host_name)
         logger.info("table.created", extra={"code": code})
+        return session, host
+
+    def create_solo(self, host_name: str, bots: int) -> tuple[GameSession, Seat]:
+        """Create a table with the host plus `bots` computer opponents and start
+        it immediately (no lobby)."""
+        bots = max(1, min(bots, self._max - 1))
+        session, host = self.create(host_name)
+        for i in range(bots):
+            session.add_player(f"Ordinateur {i + 1}", is_bot=True)
+        session.start()
+        logger.info("table.solo_created", extra={"code": session.code, "bots": bots})
         return session, host
 
     def get(self, code: str) -> GameSession:

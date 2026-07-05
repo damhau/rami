@@ -8,6 +8,35 @@ const RANK_ACE = 1;
 const RANK_ACE_HIGH = 14;
 const MIN_RANK = 1;
 
+// Point value of each rank (mirrors src/rami/game/cards.py RANK_POINTS).
+const RANK_POINTS: Record<number, number> = {
+  1: 11, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 11: 10, 12: 10, 13: 10,
+};
+
+function rankPoints(rank: number): number {
+  return RANK_POINTS[rank === RANK_ACE_HIGH ? RANK_ACE : rank];
+}
+
+/** Laid value of a staged meld: a joker counts as the card it represents.
+ * Mirrors the server's meld_points so the tray total matches the go-out check. */
+export function meldPoints(kind: MeldKind, cards: CardView[]): number {
+  if (kind === "run") {
+    const ordered = arrangeRun(cards);
+    if (!ordered) return 0;
+    const byId = new Map(cards.map((c) => [c.id, c]));
+    // Reconstruct the run's ranks from the ordered sequence to value the jokers.
+    const seq = ordered.map((id) => byId.get(id)!);
+    const anchor = seq.findIndex((c) => !c.is_joker);
+    if (anchor === -1) return 0;
+    const base = seq[anchor].rank! - anchor; // rank of position 0
+    return seq.reduce((sum, c, i) => sum + rankPoints(c.is_joker ? base + i : c.rank!), 0);
+  }
+  // Set: every card (joker included) is worth the shared rank.
+  const rank = cards.find((c) => !c.is_joker)?.rank;
+  if (rank == null) return 0;
+  return cards.reduce((sum, c) => sum + rankPoints(c.is_joker ? rank : c.rank!), 0);
+}
+
 /** Order `cards` into a valid run (any input order), or null. Returns card ids. */
 export function arrangeRun(cards: CardView[]): number[] | null {
   if (cards.length < 3) return null;

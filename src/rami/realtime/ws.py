@@ -8,6 +8,7 @@ the session lock, and the result is broadcast as a *per-seat redacted* snapshot
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -15,7 +16,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
 from rami.core.exceptions import AppError, IllegalMove, TableState
-from rami.game.state import Event
+from rami.game import ai
+from rami.game.state import Event, GameState, Phase
 from rami.tables.manager import GameSession, TableManager
 
 from . import protocol as P
@@ -25,6 +27,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 connections = ConnectionManager()
+
+# Pause between bot moves so a human can follow the play unfold.
+BOT_MOVE_DELAY_S = 0.7
+_TURN_PHASES = {Phase.AWAIT_DRAW, Phase.AWAIT_DISCARD}
 
 
 def _manager(ws: WebSocket) -> TableManager:
@@ -55,6 +61,44 @@ async def _broadcast(session: GameSession, events: list[Event]) -> None:
     await _send_all(session.code, snaps)
     if events:
         await connections.broadcast(session.code, P.events_payload(events).model_dump())
+
+
+def _bot_seat_to_act(session: GameSession, state: GameState) -> int | None:
+    """The bot seat that should move now (a free-card decider, else the turn
+    seat), or None if it is a human's move."""
+    offer = state.free_card
+    if offer is not None and offer.pending_seats:
+        head = offer.pending_seats[0]
+        if session.seats[head].is_bot:
+            return head
+    if state.phase in _TURN_PHASES and session.seats[state.turn_seat].is_bot:
+        return state.turn_seat
+    return None
+
+
+async def _run_bots(session: GameSession) -> None:
+    """Advance any bot moves until it is a human's turn again, broadcasting each
+    step with a short delay for readability."""
+    if not session.has_bots:
+        return
+    while True:
+        async with session.lock:
+            state = session.state
+            if state is None:
+                return
+            seat = _bot_seat_to_act(session, state)
+            if seat is None:
+                return
+            intent = ai.next_bot_intent(state, seat)
+            if intent is None:
+                return
+            try:
+                events = session.apply(intent)
+            except AppError:
+                logger.exception("bot.move_failed", extra={"code": session.code, "seat": seat})
+                return
+        await _broadcast(session, events)
+        await asyncio.sleep(BOT_MOVE_DELAY_S)
 
 
 def _process(session: GameSession, seat: int, msg: P.ClientMessage) -> list[Event]:
@@ -94,6 +138,8 @@ async def table_ws(websocket: WebSocket, code: str, token: str = "") -> None:
     connections.register(session.code, seat.seat, websocket)
     logger.info("ws.connected", extra={"code": session.code, "seat": seat.seat})
     await _broadcast(session, [])
+    # A solo game may already be waiting on the bots (they can act before the human).
+    await _run_bots(session)
 
     try:
         while True:
@@ -114,6 +160,7 @@ async def table_ws(websocket: WebSocket, code: str, token: str = "") -> None:
                 )
                 continue
             await _broadcast(session, events)
+            await _run_bots(session)
     except WebSocketDisconnect:
         logger.info("ws.disconnected", extra={"code": session.code, "seat": seat.seat})
     finally:

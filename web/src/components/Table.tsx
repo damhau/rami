@@ -5,6 +5,7 @@ import { Lobby } from "./Lobby";
 import { GameTable } from "./GameTable";
 import { Scoreboard } from "./Scoreboard";
 import { GameOverDialog, RoundOverDialog } from "./Dialogs";
+import { HelpButton } from "./Help";
 
 export function Table() {
   const { snapshot, connected, error, leave, dismissError, session } = useStore();
@@ -37,9 +38,12 @@ export function Table() {
               {connected ? t.table.connected : t.table.connecting}
             </span>
           </span>
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={leave}>
-            {t.table.leave}
-          </Button>
+          <div className="ml-auto flex items-center gap-1">
+            <HelpButton />
+            <Button variant="ghost" size="sm" onClick={leave}>
+              {t.table.leave}
+            </Button>
+          </div>
         </div>
       </div>
 

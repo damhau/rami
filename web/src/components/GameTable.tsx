@@ -18,7 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { CardView, MeldView, Snapshot } from "../types";
 import { useStore } from "../store";
 import { t, contractLabel, meldKindLabel } from "../i18n";
-import { detectMeld } from "../lib/melds";
+import { detectMeld, meldPoints } from "../lib/melds";
 import { Button } from "./ui/button";
 import { CardBack, PlayingCard } from "./PlayingCard";
 import { cn } from "../lib/utils";
@@ -82,19 +82,30 @@ export function GameTable({ snap }: { snap: Snapshot }) {
 
   const layOffMode = canAct && goneOut && selected.length === 1;
 
+  // Cards already staged in the tray are hidden from the hand until laid/cleared.
+  const stagedIds = new Set(tray.flatMap((g) => g.card_ids));
+  const trayTotal = tray.reduce((sum, g) => {
+    const cards = g.card_ids
+      .map((id) => snap.your_hand.find((c) => c.id === id))
+      .filter((c): c is CardView => c !== undefined);
+    return sum + meldPoints(g.kind, cards);
+  }, 0);
+  const enoughToGoOut = trayTotal >= snap.go_out_min_points;
+
   // Hand ordered by the player's drag-arranged order (reconciled in the store).
   const orderedHand = handOrder
     .map((id) => snap.your_hand.find((c) => c.id === id))
     .filter((c): c is CardView => c !== undefined);
-  const hand = orderedHand.length === snap.your_hand.length ? orderedHand : snap.your_hand;
+  const fullHand = orderedHand.length === snap.your_hand.length ? orderedHand : snap.your_hand;
+  const hand = fullHand.filter((c) => !stagedIds.has(c.id));
 
   const onDragEnd = (ev: DragEndEvent) => {
     const { active, over } = ev;
     if (!over || active.id === over.id) return;
-    const ids = hand.map((c) => c.id);
-    const from = ids.indexOf(active.id as number);
-    const to = ids.indexOf(over.id as number);
-    if (from !== -1 && to !== -1) setHandOrder(arrayMove(ids, from, to));
+    // Reorder within the full hand order so staged (hidden) cards keep their place.
+    const from = handOrder.indexOf(active.id as number);
+    const to = handOrder.indexOf(over.id as number);
+    if (from !== -1 && to !== -1) setHandOrder(arrayMove(handOrder, from, to));
   };
 
   const layOff = (meld: MeldView) => {
@@ -343,6 +354,20 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[11px] font-semibold text-gold">
               {t.game.tray}
             </span>
+            {tray.length > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                  enoughToGoOut
+                    ? "bg-emerald-500/20 text-emerald-300"
+                    : "bg-white/10 text-slate-300",
+                )}
+                title={goneOut ? undefined : enoughToGoOut ? t.game.enoughToGoOut : t.game.needMore(snap.go_out_min_points)}
+              >
+                {t.game.trayTotal(trayTotal)}
+                {!goneOut && (enoughToGoOut ? ` · ${t.game.enoughToGoOut}` : ` · ${t.game.needMore(snap.go_out_min_points)}`)}
+              </span>
+            )}
             {tray.map((g, gi) => (
               <div key={gi} className="flex items-center gap-1 rounded-lg bg-black/20 p-1.5">
                 {g.card_ids.map((id) => {

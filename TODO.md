@@ -11,3 +11,9 @@
 - [x] change the code to be only 4 digit
 - [x] add a button share link to game 
 - [x] add a qr code when game is created to join from mobile device
+- [x] when going out can we show the total score of the card
+- [x] when adding a combinasinon like a set or a run can we remove them from the player hand ?
+- [x] can we add a mode to play against the computer
+- [x] add a mode "learning" where there is a button "help" that will recommand what to do based on the hand of the player
+- [x] add an online help/guide/manual
+- [x] when you "replace" a joker wiht the corresponding card on the mat the joker should come back to the player hands

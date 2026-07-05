@@ -8,7 +8,14 @@ from fastapi import APIRouter, status
 
 from .dependencies import Manager
 from .manager import GameSession, Seat
-from .schemas import CreateTableRequest, JoinedTable, JoinTableRequest, SeatInfo, TableSummary
+from .schemas import (
+    CreateSoloRequest,
+    CreateTableRequest,
+    JoinedTable,
+    JoinTableRequest,
+    SeatInfo,
+    TableSummary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +44,14 @@ async def create_table(payload: CreateTableRequest, manager: Manager) -> JoinedT
     logger.info("tables.create.requested", extra={"player_name": payload.name})
     session, host = manager.create(payload.name)
     logger.info("tables.create.succeeded", extra={"code": session.code})
+    return _joined(session, host)
+
+
+@router.post("/solo", status_code=status.HTTP_201_CREATED)
+async def create_solo(payload: CreateSoloRequest, manager: Manager) -> JoinedTable:
+    logger.info("tables.solo.requested", extra={"bots": payload.bots})
+    session, host = manager.create_solo(payload.name, payload.bots)
+    logger.info("tables.solo.succeeded", extra={"code": session.code})
     return _joined(session, host)
 
 

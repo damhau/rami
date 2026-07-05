@@ -69,12 +69,21 @@ mutation entry point; **it deep-copies and never mutates the input**, so a rejec
 - `intents.py` — the frozen intent records; `Intent` is their union. The only way to drive
   a started game.
 - `state.py` — `GameState`, `PlayerState`, `Phase` enum, `Event`. Phases:
-  `LOBBY → AWAIT_DRAW → (FREE_CARD) → AWAIT_DISCARD → … → ROUND_OVER → GAME_OVER`.
+  `LOBBY → AWAIT_DRAW → AWAIT_DISCARD → … → ROUND_OVER → GAME_OVER`.
 - `scoring.py` — end-of-round hand penalty (jokers = 25).
 - `engine.py` — `apply`, `new_game`, `start_round`, `_end_round`. Enforces turn order,
   phase, the go-out rule (first lay must satisfy the contract **and** total ≥ 40 pts), the
   discard-pickup obligation (`taken_from_discard_id` must be laid before discarding), and
-  the free-card ("carte gratuite") chain after a stock draw.
+  the free-card ("carte gratuite") offer after a stock draw.
+- `ai.py` — a pure heuristic computer player; `next_bot_intent(state, seat)` returns the
+  bot's next move (draws stock, goes out when contract + 40 pts is reachable, lays off,
+  discards its worst card). Used by the solo ("vs computer") mode.
+
+**Free-card model (3+ players):** drawing from the stock refuses the visible discard and
+opens a `FreeCardOffer` to the following seats *without blocking the drawer* — they proceed
+to `AWAIT_DISCARD` immediately. Following seats may `ClaimFreeCard`/`PassFreeCard`
+out-of-turn until the drawer discards, which clears the offer. There is no `FREE_CARD`
+phase and no timeout. 2-player games get no free-card offer.
 
 ### Table lifecycle — `src/rami/tables/`
 
@@ -89,9 +98,10 @@ flow (create/join/inspect) under `/api/v1/tables`; seat 0 is the host.
 Pydantic discriminated union) → apply under `session.lock` → broadcast. **`protocol.py` also
 does per-seat redaction**: `build_snapshot` gives each player their own hand but opponents
 only as counts (`hand_count`) — never send raw `GameState` to a client. `connections.py`
-tracks live sockets per (code, seat). The free-card offer auto-passes after
-`FREE_CARD_TIMEOUT_S` via a background task guarded by `session.decision_nonce` (bumped on
-every state change) so a stale timer can't fire.
+tracks live sockets per (code, seat). After each broadcast (and on connect), `_run_bots`
+drives any bot seats (`Seat.is_bot`) — applying `ai.next_bot_intent` moves with a short
+delay — until it is a human's turn again. Solo games are created via `TableManager.create_solo`
+(host + N bots, started immediately) behind `POST /api/v1/tables/solo`.
 
 ### Core — `src/rami/core/`
 
@@ -120,3 +130,16 @@ endpoints.
   (E501 is left to the formatter).
 - The client hand and staged tray are reconciled against every snapshot (cards no longer in
   hand are dropped) — server state is always the source of truth.
+
+## Releases & commits
+
+- **Use Conventional Commits** for every commit (`feat:`, `fix:`, `chore:`, `docs:`,
+  `refactor:`, `test:`, …). Commitizen derives the next version from them.
+- **Cut a release with `uv run cz bump`** — it bumps the version in `pyproject.toml`
+  (`[tool.commitizen]`), updates `CHANGELOG.md`, commits with `[skip ci]`, and creates a
+  `v$version` tag (`tag_format = "v$major.$minor.$patch$prerelease"`). Push with
+  `git push --follow-tags`.
+- **The `v*` tag is what ships.** Pushing it triggers `.github/workflows/docker-publish.yml`,
+  which builds/pushes `damienh/rami:<version>` and updates the image tag in the
+  `damhau/k8s-argocd` gitops repo for ArgoCD. `type=semver` strips the leading `v`, so tag
+  `v0.1.3` → image `0.1.3`. Do not hand-edit the version or create `v*` tags by other means.

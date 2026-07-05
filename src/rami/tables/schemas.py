@@ -9,6 +9,11 @@ class CreateTableRequest(BaseModel):
     name: str = Field(min_length=1, max_length=24)
 
 
+class CreateSoloRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=24)
+    bots: int = Field(default=1, ge=1, le=3)
+
+
 class JoinTableRequest(BaseModel):
     name: str = Field(min_length=1, max_length=24)
 

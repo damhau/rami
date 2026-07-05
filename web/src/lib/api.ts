@@ -21,3 +21,7 @@ export function createTable(name: string): Promise<JoinedTable> {
 export function joinTable(code: string, name: string): Promise<JoinedTable> {
   return request<JoinedTable>(`/api/v1/tables/${code.toUpperCase()}/join`, { name });
 }
+
+export function createSolo(name: string, bots: number): Promise<JoinedTable> {
+  return request<JoinedTable>("/api/v1/tables/solo", { name, bots });
+}

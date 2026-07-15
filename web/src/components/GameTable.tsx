@@ -203,14 +203,12 @@ export function GameTable({ snap }: { snap: Snapshot }) {
                       <span className="ml-1 text-[10px] text-rose-300">{t.game.offline}</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-300">
-                    {p.is_turn ? (
-                      <span className="text-gold">{t.game.theirTurn}</span>
-                    ) : p.has_gone_out ? (
-                      <span className="text-emerald-300">{t.game.wentOut}</span>
-                    ) : (
-                      <span>{t.game.cards(p.hand_count)}</span>
-                    )}
+                  {/* Card count stays visible for the whole game, including
+                      after the opponent goes out (issue #7). */}
+                  <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-slate-300">
+                    {p.is_turn && <span className="text-gold">{t.game.theirTurn}</span>}
+                    <span>{t.game.cards(p.hand_count)}</span>
+                    {p.has_gone_out && <span className="text-emerald-300">{t.game.wentOut}</span>}
                   </div>
                 </div>
               </div>
@@ -418,9 +416,11 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             overflow-y to clip too, so the scroll box needs top padding. */}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={hand.map((c) => c.id)} strategy={rectSortingStrategy}>
-            {/* Phones: wrap to as many rows as needed so the whole hand is
-                visible without horizontal scrolling. Desktop: one fanned row. */}
-            <div className="mt-3 flex flex-wrap items-end justify-center gap-x-1 gap-y-3 pt-6 pb-2 sm:flex-nowrap sm:justify-start sm:gap-0 sm:overflow-x-auto">
+            {/* Phones: wrap to as many rows as needed, but cap the strip's
+                height and scroll it internally so a large hand can never push
+                the action buttons below the fold (issue #6). Desktop: one
+                fanned row that scrolls horizontally. */}
+            <div className="mt-3 flex max-h-[38dvh] flex-wrap items-end justify-center gap-x-1 gap-y-3 overflow-y-auto pt-6 pb-2 sm:max-h-none sm:flex-nowrap sm:justify-start sm:gap-0 sm:overflow-x-auto sm:overflow-y-visible">
               {hand.map((c, i) => (
                 <SortableCard
                   key={c.id}

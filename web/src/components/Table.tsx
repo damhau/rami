@@ -78,7 +78,7 @@ export function Table() {
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 gap-4">
-              <div className="min-w-0 flex-1">
+              <div className="min-h-0 min-w-0 flex-1">
                 <GameTable snap={snapshot} />
               </div>
               {/* Sidebar on large screens; a drawer on phones/tablets. */}

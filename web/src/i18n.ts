@@ -135,6 +135,14 @@ export const t = {
     discard: "Défausser",
     tooFewCards: "Sélectionnez au moins 3 cartes.",
     notAMeld: "Ces cartes ne forment ni brelan ni suite.",
+    chooseMeld: "Comment poser ces cartes ?",
+    chooseMeldHint: "Choisissez la combinaison et la valeur des jokers.",
+    asSet: "Brelan",
+    asRunTitle: "En suite",
+    jokerEquals: (rank: string) => `Joker = ${rank}`,
+    chooseJokerEnd: "De quel côté ajouter le joker ?",
+    chooseJokerEndHint: "Le joker peut prolonger la suite d'un côté ou de l'autre.",
+    cancel: "Annuler",
   },
 
   dialogs: {

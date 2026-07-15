@@ -60,6 +60,9 @@ class GameState:
     next_meld_id: int = 0
     taken_from_discard_id: int | None = None  # card that must be laid this turn
     free_card: FreeCardOffer | None = None
+    # True only during the round's opening turn (before the starter's first draw);
+    # gates the 2-player opening free card (§3.7).
+    opening_turn: bool = False
 
     rng_seed: int = 0
     shuffle_count: int = 0

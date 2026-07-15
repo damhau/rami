@@ -54,6 +54,9 @@ class LayOff:
     seat: int
     meld_id: int
     card_id: int
+    # For a joker laid onto a run: the rank it should represent, so the player can
+    # extend the high end instead of always the lowest (§3.9 / issue #11).
+    as_rank: int | None = None
 
 
 @dataclass(frozen=True)

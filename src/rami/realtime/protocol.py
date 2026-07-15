@@ -65,6 +65,7 @@ class LayOffMsg(_Base):
     type: Literal["lay_off"]
     meld_id: int
     card_id: int
+    as_rank: int | None = None  # for a joker onto a run: the rank it represents (#11)
 
 
 class RecoverJokerMsg(_Base):
@@ -129,7 +130,7 @@ def to_engine_intent(seat: int, msg: ClientMessage) -> Intent | None:
         case LayMeldsMsg():
             return LayMelds(seat, [MeldSpec(kind=m.kind, card_ids=m.card_ids) for m in msg.melds])
         case LayOffMsg():
-            return LayOff(seat, msg.meld_id, msg.card_id)
+            return LayOff(seat, msg.meld_id, msg.card_id, msg.as_rank)
         case RecoverJokerMsg():
             return RecoverJoker(seat, msg.meld_id, msg.card_id)
         case DiscardMsg():
@@ -154,7 +155,7 @@ class CardView(BaseModel):
 
 
 class ReprView(BaseModel):
-    suit: str
+    suit: str | None
     rank: int
     label: str
 
@@ -257,9 +258,10 @@ def card_view(card: Card) -> CardView:
 
 
 def _repr_view(rep: ReprCard) -> ReprView:
-    return ReprView(
-        suit=rep.suit.value, rank=rep.rank, label=f"{rank_label(rep.rank)}{rep.suit.value}"
-    )
+    # An unresolved joker shows its rank only — the suit is not yet determined.
+    suit = rep.suit.value if rep.suit is not None else None
+    label = f"{rank_label(rep.rank)}{suit}" if suit is not None else rank_label(rep.rank)
+    return ReprView(suit=suit, rank=rep.rank, label=label)
 
 
 def meld_view(meld: Meld) -> MeldView:

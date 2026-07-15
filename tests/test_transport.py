@@ -124,6 +124,9 @@ def test_disconnected_seat_is_auto_played(client, monkeypatch):
 
     monkeypatch.setattr(wsmod, "DISCONNECT_TIMEOUT_S", 0.3)
     monkeypatch.setattr(wsmod, "AUTOPLAY_STEP_S", 0.05)
+    # The opening stock draw may offer the other (connected) seat a free card,
+    # which briefly holds the drawer; keep that window short for the test.
+    monkeypatch.setattr(wsmod, "FREE_CARD_TIMEOUT_S", 0.3)
 
     a = _create_table(client, "Alice")
     b = client.post(f"/api/v1/tables/{a['code']}/join", json={"name": "Bob"}).json()
@@ -152,6 +155,39 @@ def test_disconnected_seat_is_auto_played(client, monkeypatch):
     finally:
         for c in cm.values():
             c.__exit__(None, None, None)
+
+
+def test_bot_drawer_pauses_for_human_free_card_decision():
+    # Issue #10: while a human is being offered the refused discard, the bot
+    # drawer must not act (its discard would close the offer) — the table waits
+    # on the human. A bot at the head decides its own free card as before.
+    import rami.realtime.ws as wsmod
+    from conftest import card
+    from rami.game.cards import Suit
+    from rami.game.state import FreeCardOffer, GameState, PlayerState
+    from rami.game.state import Phase as P
+    from rami.tables.manager import GameSession, Seat
+
+    seats = [
+        Seat(seat=0, name="Bot", token="a", connected=True, is_bot=True),
+        Seat(seat=1, name="Human", token="b", connected=True, is_bot=False),
+    ]
+    state = GameState(
+        players=[PlayerState(0, "Bot"), PlayerState(1, "Human")],
+        phase=P.AWAIT_DISCARD,
+        turn_seat=0,
+        discard=[card(Suit.HEARTS, 9, 5)],
+        free_card=FreeCardOffer(pending_seats=[1], resume_seat=0),
+    )
+    session = GameSession(code="X", min_players=2, max_players=2, seats=seats, state=state)
+
+    assert wsmod._bot_seat_to_act(session, state) is None  # bot drawer paused
+    assert wsmod._waiting_human_seat(session) == 1  # table waits on the human
+
+    # If the head is a bot, it decides its own free card immediately.
+    seats[1].is_bot = True
+    assert wsmod._bot_seat_to_act(session, state) == 1
+    assert wsmod._waiting_human_seat(session) is None
 
 
 def test_non_host_cannot_start(client):

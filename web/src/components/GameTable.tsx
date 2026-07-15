@@ -18,9 +18,16 @@ import { CSS } from "@dnd-kit/utilities";
 import type { CardView, MeldView, Snapshot } from "../types";
 import { useStore } from "../store";
 import { t, contractLabel, meldKindLabel } from "../i18n";
-import { detectMeld, meldPoints } from "../lib/melds";
+import {
+  canBeSet,
+  jokerRunLayOffRanks,
+  meldPoints,
+  runOptions,
+  type RunOption,
+} from "../lib/melds";
 import { Button } from "./ui/button";
 import { CardBack, PlayingCard } from "./PlayingCard";
+import { MeldKindDialog, JokerEndDialog } from "./MeldPicker";
 import { cn } from "../lib/utils";
 
 /** One hand card wired for drag-to-reorder while still handling tap-to-select. */
@@ -65,6 +72,16 @@ export function GameTable({ snap }: { snap: Snapshot }) {
   const { selected, tray, send, toggleSelect, addTrayGroup, clearTray, handOrder, setHandOrder } =
     useStore();
   const [meldHint, setMeldHint] = useState<string | null>(null);
+  // Ambiguous meld (set vs run, or joker placement) awaiting the player's choice.
+  const [meldChoice, setMeldChoice] = useState<{
+    cards: CardView[];
+    setValid: boolean;
+    runOpts: RunOption[];
+  } | null>(null);
+  // A joker lay-off onto a run that can extend either end (#11).
+  const [jokerEnd, setJokerEnd] = useState<{ meldId: number; cardId: number; ranks: number[] } | null>(
+    null,
+  );
   const me = snap.you;
   const mine = snap.players[me];
   const opponents = snap.players.filter((p) => p.seat !== me);
@@ -114,7 +131,25 @@ export function GameTable({ snap }: { snap: Snapshot }) {
   };
 
   const layOff = (meld: MeldView) => {
-    if (layOffMode) send({ type: "lay_off", meld_id: meld.id, card_id: selected[0] });
+    if (!layOffMode) return;
+    const cardId = selected[0];
+    const card = snap.your_hand.find((c) => c.id === cardId);
+    // Laying a joker onto a run can extend either end — ask which (#11).
+    if (card?.is_joker && meld.kind === "run") {
+      const ranks = meld.cards.map((c) =>
+        c.is_joker ? (meld.reprs[c.id]?.rank ?? 0) : (c.rank ?? 0),
+      );
+      const ends = jokerRunLayOffRanks(ranks);
+      if (ends.length > 1) {
+        setJokerEnd({ meldId: meld.id, cardId, ranks: ends });
+        return;
+      }
+      if (ends.length === 1) {
+        send({ type: "lay_off", meld_id: meld.id, card_id: cardId, as_rank: ends[0] });
+        return;
+      }
+    }
+    send({ type: "lay_off", meld_id: meld.id, card_id: cardId });
   };
   const recoverJoker = (meld: MeldView) => {
     if (canAct && goneOut && selected.length === 1)
@@ -125,13 +160,39 @@ export function GameTable({ snap }: { snap: Snapshot }) {
     const cards = selected
       .map((id) => snap.your_hand.find((c) => c.id === id))
       .filter((c): c is CardView => c !== undefined);
-    const detected = detectMeld(cards);
-    if (!detected) {
-      setMeldHint(cards.length < 3 ? t.game.tooFewCards : t.game.notAMeld);
+    if (cards.length < 3) {
+      setMeldHint(t.game.tooFewCards);
+      return;
+    }
+    const setValid = canBeSet(cards);
+    const runOpts = runOptions(cards);
+    if (!setValid && runOpts.length === 0) {
+      setMeldHint(t.game.notAMeld);
       return;
     }
     setMeldHint(null);
-    addTrayGroup(detected);
+    // Unambiguous: one kind, one arrangement -> stage it directly.
+    if (setValid && runOpts.length === 0) {
+      addTrayGroup({ kind: "set", card_ids: cards.map((c) => c.id) });
+      return;
+    }
+    if (!setValid && runOpts.length === 1) {
+      addTrayGroup({ kind: "run", card_ids: runOpts[0].card_ids });
+      return;
+    }
+    // Ambiguous (set vs run, and/or multiple joker placements) -> ask (#2, #9).
+    setMeldChoice({ cards, setValid, runOpts });
+  };
+
+  const pickMeld = (kind: "set" | "run", cardIds: number[]) => {
+    addTrayGroup({ kind, card_ids: cardIds });
+    setMeldChoice(null);
+  };
+
+  const pickJokerEnd = (asRank: number) => {
+    if (jokerEnd)
+      send({ type: "lay_off", meld_id: jokerEnd.meldId, card_id: jokerEnd.cardId, as_rank: asRank });
+    setJokerEnd(null);
   };
 
   const layDown = () => {
@@ -203,14 +264,12 @@ export function GameTable({ snap }: { snap: Snapshot }) {
                       <span className="ml-1 text-[10px] text-rose-300">{t.game.offline}</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-300">
-                    {p.is_turn ? (
-                      <span className="text-gold">{t.game.theirTurn}</span>
-                    ) : p.has_gone_out ? (
-                      <span className="text-emerald-300">{t.game.wentOut}</span>
-                    ) : (
-                      <span>{t.game.cards(p.hand_count)}</span>
-                    )}
+                  {/* Card count stays visible for the whole game, including
+                      after the opponent goes out (issue #7). */}
+                  <div className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-slate-300">
+                    {p.is_turn && <span className="text-gold">{t.game.theirTurn}</span>}
+                    <span>{t.game.cards(p.hand_count)}</span>
+                    {p.has_gone_out && <span className="text-emerald-300">{t.game.wentOut}</span>}
                   </div>
                 </div>
               </div>
@@ -418,9 +477,11 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             overflow-y to clip too, so the scroll box needs top padding. */}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={hand.map((c) => c.id)} strategy={rectSortingStrategy}>
-            {/* Phones: wrap to as many rows as needed so the whole hand is
-                visible without horizontal scrolling. Desktop: one fanned row. */}
-            <div className="mt-3 flex flex-wrap items-end justify-center gap-x-1 gap-y-3 pt-6 pb-2 sm:flex-nowrap sm:justify-start sm:gap-0 sm:overflow-x-auto">
+            {/* Phones: wrap to as many rows as needed, but cap the strip's
+                height and scroll it internally so a large hand can never push
+                the action buttons below the fold (issue #6). Desktop: one
+                fanned row that scrolls horizontally. */}
+            <div className="mt-3 flex max-h-[38dvh] flex-wrap items-end justify-center gap-x-1 gap-y-3 overflow-y-auto pt-6 pb-2 sm:max-h-none sm:flex-nowrap sm:justify-start sm:gap-0 sm:overflow-x-auto sm:overflow-y-visible">
               {hand.map((c, i) => (
                 <SortableCard
                   key={c.id}
@@ -478,6 +539,23 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </Button>
         </div>
       </div>
+
+      {meldChoice && (
+        <MeldKindDialog
+          cards={meldChoice.cards}
+          setValid={meldChoice.setValid}
+          runOptions={meldChoice.runOpts}
+          onPick={pickMeld}
+          onCancel={() => setMeldChoice(null)}
+        />
+      )}
+      {jokerEnd && (
+        <JokerEndDialog
+          ranks={jokerEnd.ranks}
+          onPick={pickJokerEnd}
+          onCancel={() => setJokerEnd(null)}
+        />
+      )}
     </div>
   );
 }

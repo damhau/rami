@@ -31,6 +31,7 @@ from .melds import (
     MeldKind,
     arrange_run,
     cards_points,
+    is_valid_run_order,
     meld_points,
     repr_matches_card,
     try_lay_off,
@@ -97,6 +98,7 @@ def start_round(state: GameState) -> tuple[GameState, list[Event]]:
 
     s.turn_seat = (s.dealer_seat + 1) % n
     s.phase = Phase.AWAIT_DRAW
+    s.opening_turn = True  # the starter has not drawn yet (§3.7 opening free card)
     events = [Event("round_started", {"round_no": s.round_no, "turn_seat": s.turn_seat})]
     return s, events
 
@@ -181,6 +183,8 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
     if s.phase != Phase.AWAIT_DRAW:
         raise IllegalMove("you cannot draw now")
     _require_turn(s, intent.seat)
+    opening = s.opening_turn
+    s.opening_turn = False
     card = _draw_one_from_stock(s)
     s.player(intent.seat).hand.append(card)
     events.append(Event("drew", {"seat": intent.seat, "source": "stock"}))
@@ -188,10 +192,13 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
     # The drawer proceeds immediately — they are never blocked by the offer.
     s.phase = Phase.AWAIT_DISCARD
 
-    # With 3+ players, drawing from stock refuses the visible discard, which the
-    # following players may then claim for free. The offer stays open (non-blocking)
-    # until the drawer discards, at which point it is dropped (§3.7).
-    if s.num_players >= 3 and s.discard:
+    # Drawing from stock refuses the visible discard, which another player may then
+    # claim for free. The offer stays open (non-blocking) until the drawer discards,
+    # at which point it is dropped (§3.7).
+    #  - 3+ players: every stock draw offers the refused card to the following seats.
+    #  - 2 players: only the *opening* discard is offered — if the starter refuses it,
+    #    the opponent may take it for free (no obligation to go out).
+    if s.discard and (s.num_players >= 3 or opening):
         pending = [(intent.seat + k) % s.num_players for k in range(1, s.num_players)]
         s.free_card = FreeCardOffer(pending_seats=pending, resume_seat=intent.seat)
         events.append(Event("free_card_offered", {"seats": list(pending)}))
@@ -203,6 +210,7 @@ def _draw_discard(s: GameState, intent: DrawDiscard, events: list[Event]) -> Non
     _require_turn(s, intent.seat)
     if not s.discard:
         raise IllegalMove("the discard pile is empty")
+    s.opening_turn = False
     card = s.discard.pop()
     s.player(intent.seat).hand.append(card)
     # Taking the discard obliges laying it this turn (a go-out if not yet out).
@@ -281,9 +289,10 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
             seen.add(cid)
             cards.append(_hand_card(player, cid))
         validate_meld(spec.kind, cards)
-        if spec.kind == MeldKind.RUN:
-            # Accept the cards in any order; canonicalize the run so joker
-            # representations and the table display come out right.
+        if spec.kind == MeldKind.RUN and not is_valid_run_order(cards):
+            # The player's order isn't itself a valid run, so canonicalize it to
+            # the lowest arrangement. When their order *is* already valid we keep
+            # it, honouring where they placed each joker (§3.9 / issue #2).
             arranged = arrange_run(cards)
             assert arranged is not None  # validate_meld just passed
             cards = arranged
@@ -301,13 +310,19 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
         if s.taken_from_discard_id is not None and s.taken_from_discard_id not in seen:
             raise IllegalMove("the card taken from the discard must be used in your melds")
 
+    # A turn always ends on a discard (§3.10): a player may never lay every card
+    # in hand — one must be kept back to discard. This holds for the go-out action
+    # and for supplementary melds after going out.
+    laid_ids = {c.id for m in built for c in m.cards}
+    if not any(c.id not in laid_ids for c in player.hand):
+        raise IllegalMove("you must keep a card to discard — you cannot lay your whole hand")
+
     # Commit: assign ids, move cards out of hand, place on the table.
     for m in built:
         m.id = s.next_meld_id
         s.next_meld_id += 1
         m.refresh()
         s.table_melds.append(m)
-    laid_ids = {c.id for m in built for c in m.cards}
     player.hand = [c for c in player.hand if c.id not in laid_ids]
 
     if not player.has_gone_out:
@@ -317,9 +332,6 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
 
     if s.taken_from_discard_id is not None and s.taken_from_discard_id in laid_ids:
         s.taken_from_discard_id = None
-
-    if not player.hand:
-        _end_round(s, intent.seat, events)
 
 
 def _matching_joker_index(meld: Meld, real: Card) -> int | None:
@@ -351,8 +363,8 @@ def _do_recover_joker(
     events.append(
         Event("recovered_joker", {"seat": player.seat, "meld_id": meld.id, "joker_id": joker.id})
     )
-    if not player.hand:
-        _end_round(s, player.seat, events)
+    # Recovery is hand-size-neutral (swap a real card for the joker), so it can
+    # never empty the hand — the turn still ends on a later discard (§3.10).
 
 
 def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
@@ -372,17 +384,18 @@ def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
     if joker_idx is not None:
         _do_recover_joker(s, player, meld, joker_idx, card, events)
         return
-    new_cards = try_lay_off(meld, card)
+    new_cards = try_lay_off(meld, card, intent.as_rank)
     if new_cards is None:
         raise IllegalMove(f"{card.label} cannot extend that meld")
+    # A turn must end on a discard (§3.10): never lay off your last card.
+    if len(player.hand) <= 1:
+        raise IllegalMove("you must keep a card to discard — you cannot lay off your last card")
     meld.cards = new_cards
     meld.refresh()
     _take_from_hand(player, intent.card_id)
     events.append(Event("laid_off", {"seat": intent.seat, "meld_id": meld.id, "card_id": card.id}))
     if s.taken_from_discard_id == card.id:
         s.taken_from_discard_id = None
-    if not player.hand:
-        _end_round(s, intent.seat, events)
 
 
 def _recover_joker(s: GameState, intent: RecoverJoker, events: list[Event]) -> None:

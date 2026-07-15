@@ -31,10 +31,15 @@ class MeldKind(StrEnum):
 
 @dataclass(frozen=True)
 class ReprCard:
-    """The concrete card a joker currently stands in for."""
+    """The card a joker currently stands in for.
 
-    suit: Suit
+    `suit` is None while the joker's suit is still ambiguous — e.g. a set with
+    two or more suits missing (§3.9): the rank is fixed but which suit the joker
+    represents is not yet determined. An unresolved joker cannot be recovered
+    until its suit is pinned down."""
+
     rank: int  # 1..14 (14 = Ace high)
+    suit: Suit | None = None
 
 
 @dataclass
@@ -215,6 +220,14 @@ def is_valid_run(cards: list[Card]) -> bool:
     return arrange_run(cards) is not None
 
 
+def is_valid_run_order(cards: list[Card]) -> bool:
+    """True if `cards` are *already* in a valid left-to-right run order.
+
+    Lets the caller honour a player's chosen ordering — and therefore where each
+    joker sits (§3.9) — instead of canonicalizing to the lowest arrangement."""
+    return _run_start(cards) is not None
+
+
 def is_valid_meld(kind: MeldKind, cards: list[Card]) -> bool:
     return is_valid_set(cards) if kind == MeldKind.SET else is_valid_run(cards)
 
@@ -244,15 +257,18 @@ def _set_joker_reprs(cards: list[Card]) -> dict[int, ReprCard]:
     for c in real:
         assert c.suit is not None
         per_suit[c.suit] += 1
-    # Open slots, missing suits first, then second-deck copies.
-    open_slots: list[Suit] = []
-    for copy in range(NUM_DECKS):
-        for suit in ALL_SUITS:
-            if per_suit[suit] <= copy:
-                open_slots.append(suit)
+    missing = [suit for suit in ALL_SUITS if per_suit[suit] == 0]
+    # A joker's suit is only *determined* when the jokers must collectively cover
+    # every still-missing suit (§3.9). With fewer jokers than missing suits, which
+    # suit each joker stands for is ambiguous (e.g. A♠ A♥ + Joker → "A♦ or A♣"), so
+    # the suit is left unresolved until an added card pins it down. Any jokers
+    # beyond the missing suits are second-deck copies whose suit is likewise
+    # ambiguous. Every joker still carries the rank, so its point value is exact.
+    determined = missing if len(jokers) >= len(missing) else []
     out: dict[int, ReprCard] = {}
-    for joker, suit in zip(jokers, open_slots, strict=False):
-        out[joker.id] = ReprCard(suit=suit, rank=rank)
+    for i, joker in enumerate(jokers):
+        suit = determined[i] if i < len(determined) else None
+        out[joker.id] = ReprCard(rank=rank, suit=suit)
     return out
 
 
@@ -270,7 +286,9 @@ def _run_joker_reprs(cards: list[Card]) -> dict[int, ReprCard]:
 
 def repr_matches_card(rep: ReprCard, card: Card) -> bool:
     """Does `card` (a real card) match what a joker represents?"""
-    if card.is_joker or card.suit != rep.suit:
+    # An unresolved joker (suit still ambiguous) matches no concrete card, so it
+    # cannot be recovered until its suit is pinned down (§3.9).
+    if rep.suit is None or card.is_joker or card.suit != rep.suit:
         return False
     if rep.rank == RANK_ACE_HIGH:
         return card.rank == RANK_ACE
@@ -306,10 +324,28 @@ def cards_points(cards: list[Card], kind: MeldKind) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def try_lay_off(meld: Meld, card: Card) -> list[Card] | None:
-    """Return the new card list if `card` legally extends `meld`, else None."""
+def try_lay_off(meld: Meld, card: Card, as_rank: int | None = None) -> list[Card] | None:
+    """Return the new card list if `card` legally extends `meld`, else None.
+
+    For a joker laid onto a run, `as_rank` chooses which end it extends (the rank
+    it should represent) — so a player can add a joker on the high side instead of
+    always the lowest (§3.9 / issue #11). It is ignored for sets and real cards."""
     if meld.kind == MeldKind.SET:
         candidate = [*meld.cards, card]
         return candidate if is_valid_set(candidate) else None
-    # Run: re-order the combined cards so the result stays a valid sequence.
+    # Run with an explicit joker placement: put the joker at the chosen end and
+    # keep that order if it forms a valid run.
+    if card.is_joker and as_rank is not None:
+        start = _run_start(meld.cards)
+        if start is None:
+            return None
+        end = start + len(meld.cards) - 1
+        if as_rank == end + 1:
+            candidate = [*meld.cards, card]
+        elif as_rank == start - 1:
+            candidate = [card, *meld.cards]
+        else:
+            return None
+        return candidate if is_valid_run_order(candidate) else None
+    # Otherwise re-order the combined cards so the result stays a valid sequence.
     return arrange_run([*meld.cards, card])

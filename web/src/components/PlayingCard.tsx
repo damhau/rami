@@ -3,7 +3,7 @@ import { cn } from "../lib/utils";
 
 const SUIT_GLYPH: Record<string, string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
 
-function rankLabel(rank: number | null): string {
+export function rankLabel(rank: number | null): string {
   if (rank === null) return "";
   if (rank === 1 || rank === 14) return "A";
   if (rank === 11) return "J";

@@ -108,15 +108,45 @@ def test_stock_reshuffles_from_discard_when_empty():
 # --------------------------------------------------------------------------- #
 
 
-def test_two_players_get_no_free_card_offer():
-    # With only 2 players the free-card chain does not apply (§3.7): drawing from
-    # stock goes straight to the discard step.
+def test_two_players_get_no_free_card_offer_after_the_opening_turn():
+    # With 2 players the free-card offer applies only to the opening discard
+    # (§3.7): once past the opening turn, a stock draw goes straight to discard.
     g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
-    g, _ = apply(g, DrawStock(0))
+    g, _ = apply(g, DrawStock(0))  # opening_turn defaults to False here
     assert g.phase == Phase.AWAIT_DISCARD
     assert g.free_card is None
+
+
+def test_two_player_opening_free_card_offered_and_claimed():
+    # §3.7: on the opening turn, if the starter refuses the face-up card (draws
+    # stock), the opponent may take it for free — with no obligation to go out.
+    g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]
+    g.opening_turn = True
+    g, ev = apply(g, DrawStock(0))
+    assert g.free_card is not None
+    assert g.free_card.pending_seats == [1]
+    assert any(e.type == "free_card_offered" for e in ev)
+    # The opponent claims it for free: gains the card, no go-out obligation.
+    g, _ = apply(g, ClaimFreeCard(1))
+    assert any(c.id == 2 for c in g.players[1].hand)
+    assert g.taken_from_discard_id is None
+    assert g.free_card is None
+    assert g.phase == Phase.AWAIT_DISCARD  # still the starter's turn to discard
+
+
+def test_two_player_opening_free_card_declined():
+    g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]
+    g.opening_turn = True
+    g, _ = apply(g, DrawStock(0))
+    g, _ = apply(g, PassFreeCard(1))
+    assert g.free_card is None
+    assert g.discard[-1].id == 2  # nobody claimed — the opening card stays
 
 
 def test_free_card_offered_without_blocking_drawer():
@@ -284,6 +314,47 @@ def test_go_out_must_use_card_taken_from_discard():
 # --------------------------------------------------------------------------- #
 
 
+def test_lay_melds_respects_chosen_joker_position_in_run():
+    # Round 2 wants a run of 4. J-Q-K + joker: the player chooses where the joker
+    # sits by the order they send — the engine must honour it, not force the
+    # lowest arrangement (§3.9 / issue #2).
+    hand = [card(D, 11, 1), card(D, 12, 2), card(D, 13, 3), joker(4), *_filler(9)]
+    g = two_player_state(hand, _filler(13), round_no=2)
+    # [J, Q, K, joker] -> joker at the high end = Ace.
+    g_hi, _ = apply(g, LayMelds(0, [MeldSpec(RUN, [1, 2, 3, 4])]))
+    assert g_hi.table_melds[0].represents[4].rank == 14  # high Ace, not the 10
+    # [joker, J, Q, K] -> joker at the low end = 10.
+    g_lo, _ = apply(g, LayMelds(0, [MeldSpec(RUN, [4, 1, 2, 3])]))
+    assert g_lo.table_melds[0].represents[4].rank == 10
+
+
+def test_lay_off_joker_onto_run_extends_chosen_end():
+    # Issue #11: adding a joker to 5-6-7-8 should be able to extend the *high* end
+    # (joker = 9), not always the lowest (joker = 4).
+    m = Meld(0, RUN, [card(D, 5, 1), card(D, 6, 2), card(D, 7, 3), card(D, 8, 4)], 0)
+    g = two_player_state([joker(9), card(S, 2, 10)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    # Explicit high-end placement.
+    g_hi, _ = apply(g, LayOff(0, 0, 9, as_rank=9))
+    assert g_hi.table_melds[0].represents[9].rank == 9
+    # Explicit low-end placement.
+    g_lo, _ = apply(g, LayOff(0, 0, 9, as_rank=4))
+    assert g_lo.table_melds[0].represents[9].rank == 4
+    # No hint -> the previous default (lowest) is unchanged.
+    g_def, _ = apply(g, LayOff(0, 0, 9))
+    assert g_def.table_melds[0].represents[9].rank == 4
+
+
+def test_lay_off_joker_rejects_non_adjacent_rank():
+    m = Meld(0, RUN, [card(D, 5, 1), card(D, 6, 2), card(D, 7, 3), card(D, 8, 4)], 0)
+    g = two_player_state([joker(9), card(S, 2, 10)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    with pytest.raises(IllegalMove):
+        apply(g, LayOff(0, 0, 9, as_rank=11))  # 11 is not an end of 5-6-7-8
+
+
 def test_lay_off_requires_having_gone_out():
     m = Meld(0, SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 0)
     g = two_player_state([card(C, 9, 5), card(S, 2, 6)], round_no=1, gone_out0=False)
@@ -375,16 +446,42 @@ def test_round_ends_and_scores_when_last_card_discarded():
     assert any(e.type == "round_over" for e in ev)
 
 
-def test_round_ends_when_last_card_is_melded_not_discarded():
-    # Player completes a lay-off with their final card -> round ends immediately.
+def test_cannot_lay_off_your_last_card():
+    # §3.10: a turn always ends on a discard — laying off the last card (which
+    # would empty the hand without a discard) is rejected.
     m = Meld(0, SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 0)
     g = two_player_state([card(C, 9, 5)], [card(H, 13, 7)], round_no=1, gone_out0=True)
     g.table_melds = [m]
     g.next_meld_id = 1
-    g, _ = apply(g, LayOff(0, 0, 5))
+    with pytest.raises(IllegalMove):
+        apply(g, LayOff(0, 0, 5))
+    # The round is not over; the player still holds the card to discard.
+    assert g.phase == Phase.AWAIT_DISCARD
+    assert len(g.players[0].hand) == 1
+
+
+def test_cannot_lay_your_whole_hand_to_go_out():
+    # A go-out that would leave nothing to discard is rejected (§3.10): the four
+    # Kings are exactly the hand, so laying them all leaves no discard.
+    hand = [card(S, 13, 1), card(H, 13, 2), card(D, 13, 3), card(C, 13, 4)]
+    g = two_player_state(hand, _filler(13), round_no=1)
+    with pytest.raises(IllegalMove):
+        apply(g, LayMelds(0, [MeldSpec(SET, [1, 2, 3, 4])]))
+    assert not g.players[0].has_gone_out
+
+
+def test_go_out_keeping_one_card_then_discard_ends_round():
+    # Four Kings + one spare: go out (keep the spare), then discard it to win.
+    hand = [card(S, 13, 1), card(H, 13, 2), card(D, 13, 3), card(C, 13, 4), card(S, 2, 5)]
+    g = two_player_state(hand, [card(H, 9, 7)], round_no=1)
+    g, _ = apply(g, LayMelds(0, [MeldSpec(SET, [1, 2, 3, 4])]))
+    assert g.players[0].has_gone_out
+    assert g.phase == Phase.AWAIT_DISCARD
+    assert [c.id for c in g.players[0].hand] == [5]
+    g, ev = apply(g, Discard(0, 5))
     assert g.phase == Phase.ROUND_OVER
     assert g.players[0].round_score == 0
-    assert g.players[1].round_score == 10
+    assert any(e.type == "round_over" for e in ev)
 
 
 def test_game_over_after_round_11():

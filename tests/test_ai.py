@@ -62,8 +62,16 @@ def test_bot_keeps_a_pair_and_discards_the_isolated_high_card():
 
 
 def test_bot_takes_the_discard_to_go_out():
-    # A♠ A♥ + 5-6-7♣; the A♦ on the discard completes A-A-A (33) + run (18) = 51.
-    hand = [card(S, 1, 1), card(H, 1, 2), card(C, 5, 3), card(C, 6, 4), card(C, 7, 5)]
+    # A♠ A♥ + 5-6-7♣ (+ a spare 9♥ to discard); the A♦ on the discard completes
+    # A-A-A (33) + run (18) = 51, leaving the 9♥ to discard (§3.10).
+    hand = [
+        card(S, 1, 1),
+        card(H, 1, 2),
+        card(C, 5, 3),
+        card(C, 6, 4),
+        card(C, 7, 5),
+        card(H, 9, 6),
+    ]
     g = two_player_state(hand, _no_meld_filler(5), round_no=1, phase=Phase.AWAIT_DRAW, turn=0)
     g.discard = [card(D, 1, 50)]  # A♦ face-up
     g.stock = [card(S, 2, 99)]
@@ -109,6 +117,28 @@ def test_bot_never_produces_an_illegal_move_across_many_deals():
             intent = next_bot_intent(g, seat)
             assert intent is not None, (seed, g.phase)
             g, _ = apply(g, intent)  # must not raise
+
+
+def test_bot_lays_off_a_placeable_card_instead_of_discarding():
+    # Issue #1/#5: after going out, the bot must lay a placeable card onto a table
+    # meld rather than discard it — especially when an opponent has a single card.
+    from rami.game.intents import LayOff
+    from rami.game.melds import Meld
+
+    m = Meld(0, MeldKind.SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 1)
+    # Hand: 9♣ (lays off onto the 9s) + an isolated K♠ to discard afterwards.
+    g = two_player_state(
+        [card(C, 9, 10), card(S, 13, 11)], [card(D, 2, 20)], round_no=1, gone_out0=True
+    )
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    assert len(g.players[1].hand) == 1  # opponent has one card
+    intent = next_bot_intent(g, 0)
+    assert intent == LayOff(0, 0, 10)  # lays off the 9♣, does not discard it
+    g2, _ = apply(g, intent)
+    # Now only the K♠ remains — it can't be laid off, so it is discarded.
+    assert [c.id for c in g2.players[0].hand] == [11]
+    assert isinstance(next_bot_intent(g2, 0), Discard)
 
 
 def test_bot_completes_a_full_turn_via_repeated_calls():

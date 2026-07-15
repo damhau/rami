@@ -35,6 +35,10 @@ BOT_MOVE_DELAY_S = 0.7
 # grace period before the bot plays their turn.
 TURN_TIMEOUT_S = 150.0
 DISCONNECT_TIMEOUT_S = 25.0
+# A pending free-card decision holds the drawer (issue #10), so a connected human
+# gets a shorter — but comfortable — window to claim before the offer auto-resolves
+# and the table moves on.
+FREE_CARD_TIMEOUT_S = 30.0
 AUTOPLAY_STEP_S = 0.5
 _TURN_PHASES = {Phase.AWAIT_DRAW, Phase.AWAIT_DISCARD}
 
@@ -81,8 +85,11 @@ def _bot_seat_to_act(session: GameSession, state: GameState) -> int | None:
     offer = state.free_card
     if offer is not None and offer.pending_seats:
         head = offer.pending_seats[0]
-        if session.seats[head].is_bot:
-            return head
+        # A bot at the head of the offer decides its own free card. A *human* at
+        # the head must be given time to react (issue #10): pause here — do not let
+        # the bot drawer rush ahead and discard, which would close the offer before
+        # the human can claim it.
+        return head if session.seats[head].is_bot else None
     if state.phase in _TURN_PHASES and session.seats[state.turn_seat].is_bot:
         return state.turn_seat
     return None
@@ -118,10 +125,31 @@ async def _run_bots(session: GameSession) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _waiting_human_seat(session: GameSession) -> int | None:
-    """The human seat the game is waiting on to take its turn, or None."""
+def _seat_is_awaited(session: GameSession, seat: int) -> bool:
+    """True if the table is currently waiting on `seat` to act — either it holds a
+    pending free-card decision at the head of the offer, or it is its turn."""
     state = session.state
-    if state is None or state.phase not in _TURN_PHASES:
+    if state is None:
+        return False
+    offer = state.free_card
+    if offer is not None and offer.pending_seats:
+        return offer.pending_seats[0] == seat
+    return state.phase in _TURN_PHASES and state.turn_seat == seat
+
+
+def _waiting_human_seat(session: GameSession) -> int | None:
+    """The human seat the game is waiting on, or None. A pending free-card
+    decision takes priority over the turn seat (issue #10): while a human is being
+    offered the refused discard, the whole table — including the bot drawer — is
+    waiting on that decision."""
+    state = session.state
+    if state is None:
+        return None
+    offer = state.free_card
+    if offer is not None and offer.pending_seats:
+        head = offer.pending_seats[0]
+        return head if not session.seats[head].is_bot else None
+    if state.phase not in _TURN_PHASES:
         return None
     ts = state.turn_seat
     if ts < len(session.seats) and not session.seats[ts].is_bot:
@@ -129,17 +157,13 @@ def _waiting_human_seat(session: GameSession) -> int | None:
     return None
 
 
-def _seat_should_act(session: GameSession, seat: int) -> bool:
-    state = session.state
-    return state is not None and state.phase in _TURN_PHASES and state.turn_seat == seat
-
-
 async def _auto_play_seat(session: GameSession, seat: int) -> None:
-    """Play the bot policy on behalf of an idle/absent seat until its turn ends."""
+    """Play the bot policy on behalf of an idle/absent seat until the table no
+    longer waits on it (its turn ends, or its free-card decision is made)."""
     while True:
         async with session.lock:
             state = session.state
-            if state is None or not _seat_should_act(session, seat):
+            if state is None or not _seat_is_awaited(session, seat):
                 return
             intent = ai.next_bot_intent(state, seat)
             if intent is None:
@@ -159,7 +183,7 @@ async def _idle_timeout(session: GameSession, seat: int, nonce: int, delay: floa
     except asyncio.CancelledError:
         return
     async with session.lock:
-        if session.decision_nonce != nonce or not _seat_should_act(session, seat):
+        if session.decision_nonce != nonce or not _seat_is_awaited(session, seat):
             return
     logger.info("turn.autoplay", extra={"code": session.code, "seat": seat})
     await _auto_play_seat(session, seat)
@@ -173,7 +197,16 @@ def _schedule_idle(session: GameSession) -> None:
     seat = _waiting_human_seat(session)
     if seat is None:
         return
-    delay = TURN_TIMEOUT_S if session.seats[seat].connected else DISCONNECT_TIMEOUT_S
+    state = session.state
+    awaiting_free_card = (
+        state is not None and state.free_card is not None and bool(state.free_card.pending_seats)
+    )
+    if not session.seats[seat].connected:
+        delay = DISCONNECT_TIMEOUT_S
+    elif awaiting_free_card:
+        delay = FREE_CARD_TIMEOUT_S
+    else:
+        delay = TURN_TIMEOUT_S
     task = asyncio.create_task(_idle_timeout(session, seat, session.decision_nonce, delay))
     _idle_tasks[session.code] = task
     task.add_done_callback(

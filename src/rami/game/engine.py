@@ -301,13 +301,19 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
         if s.taken_from_discard_id is not None and s.taken_from_discard_id not in seen:
             raise IllegalMove("the card taken from the discard must be used in your melds")
 
+    # A turn always ends on a discard (§3.10): a player may never lay every card
+    # in hand — one must be kept back to discard. This holds for the go-out action
+    # and for supplementary melds after going out.
+    laid_ids = {c.id for m in built for c in m.cards}
+    if not any(c.id not in laid_ids for c in player.hand):
+        raise IllegalMove("you must keep a card to discard — you cannot lay your whole hand")
+
     # Commit: assign ids, move cards out of hand, place on the table.
     for m in built:
         m.id = s.next_meld_id
         s.next_meld_id += 1
         m.refresh()
         s.table_melds.append(m)
-    laid_ids = {c.id for m in built for c in m.cards}
     player.hand = [c for c in player.hand if c.id not in laid_ids]
 
     if not player.has_gone_out:
@@ -317,9 +323,6 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
 
     if s.taken_from_discard_id is not None and s.taken_from_discard_id in laid_ids:
         s.taken_from_discard_id = None
-
-    if not player.hand:
-        _end_round(s, intent.seat, events)
 
 
 def _matching_joker_index(meld: Meld, real: Card) -> int | None:
@@ -351,8 +354,8 @@ def _do_recover_joker(
     events.append(
         Event("recovered_joker", {"seat": player.seat, "meld_id": meld.id, "joker_id": joker.id})
     )
-    if not player.hand:
-        _end_round(s, player.seat, events)
+    # Recovery is hand-size-neutral (swap a real card for the joker), so it can
+    # never empty the hand — the turn still ends on a later discard (§3.10).
 
 
 def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
@@ -375,14 +378,15 @@ def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
     new_cards = try_lay_off(meld, card)
     if new_cards is None:
         raise IllegalMove(f"{card.label} cannot extend that meld")
+    # A turn must end on a discard (§3.10): never lay off your last card.
+    if len(player.hand) <= 1:
+        raise IllegalMove("you must keep a card to discard — you cannot lay off your last card")
     meld.cards = new_cards
     meld.refresh()
     _take_from_hand(player, intent.card_id)
     events.append(Event("laid_off", {"seat": intent.seat, "meld_id": meld.id, "card_id": card.id}))
     if s.taken_from_discard_id == card.id:
         s.taken_from_discard_id = None
-    if not player.hand:
-        _end_round(s, intent.seat, events)
 
 
 def _recover_joker(s: GameState, intent: RecoverJoker, events: list[Event]) -> None:

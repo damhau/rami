@@ -375,16 +375,42 @@ def test_round_ends_and_scores_when_last_card_discarded():
     assert any(e.type == "round_over" for e in ev)
 
 
-def test_round_ends_when_last_card_is_melded_not_discarded():
-    # Player completes a lay-off with their final card -> round ends immediately.
+def test_cannot_lay_off_your_last_card():
+    # §3.10: a turn always ends on a discard — laying off the last card (which
+    # would empty the hand without a discard) is rejected.
     m = Meld(0, SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 0)
     g = two_player_state([card(C, 9, 5)], [card(H, 13, 7)], round_no=1, gone_out0=True)
     g.table_melds = [m]
     g.next_meld_id = 1
-    g, _ = apply(g, LayOff(0, 0, 5))
+    with pytest.raises(IllegalMove):
+        apply(g, LayOff(0, 0, 5))
+    # The round is not over; the player still holds the card to discard.
+    assert g.phase == Phase.AWAIT_DISCARD
+    assert len(g.players[0].hand) == 1
+
+
+def test_cannot_lay_your_whole_hand_to_go_out():
+    # A go-out that would leave nothing to discard is rejected (§3.10): the four
+    # Kings are exactly the hand, so laying them all leaves no discard.
+    hand = [card(S, 13, 1), card(H, 13, 2), card(D, 13, 3), card(C, 13, 4)]
+    g = two_player_state(hand, _filler(13), round_no=1)
+    with pytest.raises(IllegalMove):
+        apply(g, LayMelds(0, [MeldSpec(SET, [1, 2, 3, 4])]))
+    assert not g.players[0].has_gone_out
+
+
+def test_go_out_keeping_one_card_then_discard_ends_round():
+    # Four Kings + one spare: go out (keep the spare), then discard it to win.
+    hand = [card(S, 13, 1), card(H, 13, 2), card(D, 13, 3), card(C, 13, 4), card(S, 2, 5)]
+    g = two_player_state(hand, [card(H, 9, 7)], round_no=1)
+    g, _ = apply(g, LayMelds(0, [MeldSpec(SET, [1, 2, 3, 4])]))
+    assert g.players[0].has_gone_out
+    assert g.phase == Phase.AWAIT_DISCARD
+    assert [c.id for c in g.players[0].hand] == [5]
+    g, ev = apply(g, Discard(0, 5))
     assert g.phase == Phase.ROUND_OVER
     assert g.players[0].round_score == 0
-    assert g.players[1].round_score == 10
+    assert any(e.type == "round_over" for e in ev)
 
 
 def test_game_over_after_round_11():

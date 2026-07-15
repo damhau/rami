@@ -170,6 +170,10 @@ def _cover_contract(
         all_ids = used | {c.id for _, cs in extras for c in cs}
         if require_id is not None and require_id not in all_ids:
             return
+        # A turn always ends on a discard (§3.10): the go-out must leave at least
+        # one card in hand to discard — never lay the whole hand.
+        if len(all_ids) >= len(cards):
+            return
         total = sum(_meld_points(k, cs) for k, cs in melds)
         if total >= GO_OUT_MIN_POINTS and total > best_total:
             best_total = total
@@ -208,32 +212,41 @@ def _find_go_out(state: GameState, p: PlayerState) -> Intent | None:
 
 def _use_taken_card(state: GameState, p: PlayerState, taken_id: int) -> Intent | None:
     """Lay the just-taken discard card (lay-off, else a fresh meld). Only used
-    after going out — the taken card is otherwise handled by the go-out search."""
+    after going out — the taken card is otherwise handled by the go-out search.
+    Never plays the last card: a turn must still end on a discard (§3.10)."""
     card = next((c for c in p.hand if c.id == taken_id), None)
     if card is None:
         return None
-    for meld in state.table_melds:
-        if try_lay_off(meld, card) is not None:
-            return LayOff(p.seat, meld.id, taken_id)
+    if len(p.hand) > 1:
+        for meld in state.table_melds:
+            if try_lay_off(meld, card) is not None:
+                return LayOff(p.seat, meld.id, taken_id)
     for kind, cs in _all_candidates(p.hand):
-        if taken_id in {c.id for c in cs}:
+        if taken_id in {c.id for c in cs} and len(cs) < len(p.hand):
             return LayMelds(p.seat, [MeldSpec(kind=kind, card_ids=[c.id for c in cs])])
     return None
 
 
 def _find_post_go_out_move(state: GameState, p: PlayerState) -> Intent | None:
-    # Lay off single cards onto any table meld.
-    for card in p.hand:
-        if card.is_joker:
-            continue
-        for meld in state.table_melds:
-            if try_lay_off(meld, card) is not None:
-                return LayOff(p.seat, meld.id, card.id)
-    # Otherwise lay a fresh meld if one is available.
-    melds = _greedy_melds(p.hand)
-    if melds:
-        kind, cards = melds[0]
-        return LayMelds(p.seat, [MeldSpec(kind=kind, card_ids=[c.id for c in cards])])
+    """Shed one more card onto the table, if possible without emptying the hand.
+
+    Prefer laying off a real card, then a joker (never discard a card that has a
+    legal table play — issue #5, §3.9), then a fresh supplementary meld. Always
+    leaves at least one card so the turn can end on a discard (§3.10)."""
+    if len(p.hand) <= 1:
+        return None  # must keep the last card to discard
+    # Lay off real cards first, then jokers (a joker discarded costs a flat 25).
+    for want_joker in (False, True):
+        for card in p.hand:
+            if card.is_joker != want_joker:
+                continue
+            for meld in state.table_melds:
+                if try_lay_off(meld, card) is not None:
+                    return LayOff(p.seat, meld.id, card.id)
+    # Otherwise lay a fresh meld if one is available (and it leaves a spare).
+    for kind, cards in _greedy_melds(p.hand):
+        if len(cards) < len(p.hand):
+            return LayMelds(p.seat, [MeldSpec(kind=kind, card_ids=[c.id for c in cards])])
     return None
 
 

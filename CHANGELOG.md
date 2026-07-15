@@ -1,3 +1,17 @@
+## v0.7.0 (2026-07-15)
+
+### Feat
+
+- let players choose joker placement in runs and set/run kind (#2, #9, #11)
+- implement the 2-player opening free card (#8)
+
+### Fix
+
+- give humans time to take a free card (#10)
+- keep a joker's suit unresolved in an ambiguous set (#3)
+- **web**: keep opponent card counts and action buttons visible on mobile (#6, #7)
+- require a final discard to end a round (#4) and stop the AI discarding playable cards (#1, #5)
+
 ## v0.6.1 (2026-07-05)
 
 ### Fix

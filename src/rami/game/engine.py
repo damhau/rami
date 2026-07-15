@@ -97,6 +97,7 @@ def start_round(state: GameState) -> tuple[GameState, list[Event]]:
 
     s.turn_seat = (s.dealer_seat + 1) % n
     s.phase = Phase.AWAIT_DRAW
+    s.opening_turn = True  # the starter has not drawn yet (§3.7 opening free card)
     events = [Event("round_started", {"round_no": s.round_no, "turn_seat": s.turn_seat})]
     return s, events
 
@@ -181,6 +182,8 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
     if s.phase != Phase.AWAIT_DRAW:
         raise IllegalMove("you cannot draw now")
     _require_turn(s, intent.seat)
+    opening = s.opening_turn
+    s.opening_turn = False
     card = _draw_one_from_stock(s)
     s.player(intent.seat).hand.append(card)
     events.append(Event("drew", {"seat": intent.seat, "source": "stock"}))
@@ -188,10 +191,13 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
     # The drawer proceeds immediately — they are never blocked by the offer.
     s.phase = Phase.AWAIT_DISCARD
 
-    # With 3+ players, drawing from stock refuses the visible discard, which the
-    # following players may then claim for free. The offer stays open (non-blocking)
-    # until the drawer discards, at which point it is dropped (§3.7).
-    if s.num_players >= 3 and s.discard:
+    # Drawing from stock refuses the visible discard, which another player may then
+    # claim for free. The offer stays open (non-blocking) until the drawer discards,
+    # at which point it is dropped (§3.7).
+    #  - 3+ players: every stock draw offers the refused card to the following seats.
+    #  - 2 players: only the *opening* discard is offered — if the starter refuses it,
+    #    the opponent may take it for free (no obligation to go out).
+    if s.discard and (s.num_players >= 3 or opening):
         pending = [(intent.seat + k) % s.num_players for k in range(1, s.num_players)]
         s.free_card = FreeCardOffer(pending_seats=pending, resume_seat=intent.seat)
         events.append(Event("free_card_offered", {"seats": list(pending)}))
@@ -203,6 +209,7 @@ def _draw_discard(s: GameState, intent: DrawDiscard, events: list[Event]) -> Non
     _require_turn(s, intent.seat)
     if not s.discard:
         raise IllegalMove("the discard pile is empty")
+    s.opening_turn = False
     card = s.discard.pop()
     s.player(intent.seat).hand.append(card)
     # Taking the discard obliges laying it this turn (a go-out if not yet out).

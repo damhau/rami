@@ -108,15 +108,45 @@ def test_stock_reshuffles_from_discard_when_empty():
 # --------------------------------------------------------------------------- #
 
 
-def test_two_players_get_no_free_card_offer():
-    # With only 2 players the free-card chain does not apply (§3.7): drawing from
-    # stock goes straight to the discard step.
+def test_two_players_get_no_free_card_offer_after_the_opening_turn():
+    # With 2 players the free-card offer applies only to the opening discard
+    # (§3.7): once past the opening turn, a stock draw goes straight to discard.
     g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
-    g, _ = apply(g, DrawStock(0))
+    g, _ = apply(g, DrawStock(0))  # opening_turn defaults to False here
     assert g.phase == Phase.AWAIT_DISCARD
     assert g.free_card is None
+
+
+def test_two_player_opening_free_card_offered_and_claimed():
+    # §3.7: on the opening turn, if the starter refuses the face-up card (draws
+    # stock), the opponent may take it for free — with no obligation to go out.
+    g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]
+    g.opening_turn = True
+    g, ev = apply(g, DrawStock(0))
+    assert g.free_card is not None
+    assert g.free_card.pending_seats == [1]
+    assert any(e.type == "free_card_offered" for e in ev)
+    # The opponent claims it for free: gains the card, no go-out obligation.
+    g, _ = apply(g, ClaimFreeCard(1))
+    assert any(c.id == 2 for c in g.players[1].hand)
+    assert g.taken_from_discard_id is None
+    assert g.free_card is None
+    assert g.phase == Phase.AWAIT_DISCARD  # still the starter's turn to discard
+
+
+def test_two_player_opening_free_card_declined():
+    g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]
+    g.opening_turn = True
+    g, _ = apply(g, DrawStock(0))
+    g, _ = apply(g, PassFreeCard(1))
+    assert g.free_card is None
+    assert g.discard[-1].id == 2  # nobody claimed — the opening card stays
 
 
 def test_free_card_offered_without_blocking_drawer():

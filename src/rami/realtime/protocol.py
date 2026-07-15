@@ -154,7 +154,7 @@ class CardView(BaseModel):
 
 
 class ReprView(BaseModel):
-    suit: str
+    suit: str | None
     rank: int
     label: str
 
@@ -257,9 +257,10 @@ def card_view(card: Card) -> CardView:
 
 
 def _repr_view(rep: ReprCard) -> ReprView:
-    return ReprView(
-        suit=rep.suit.value, rank=rep.rank, label=f"{rank_label(rep.rank)}{rep.suit.value}"
-    )
+    # An unresolved joker shows its rank only — the suit is not yet determined.
+    suit = rep.suit.value if rep.suit is not None else None
+    label = f"{rank_label(rep.rank)}{suit}" if suit is not None else rank_label(rep.rank)
+    return ReprView(suit=suit, rank=rep.rank, label=label)
 
 
 def meld_view(meld: Meld) -> MeldView:

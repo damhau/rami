@@ -18,7 +18,7 @@ export interface CardView {
 }
 
 export interface ReprView {
-  suit: Suit;
+  suit: Suit | null; // null while the joker's suit is still ambiguous (§3.9)
   rank: number;
   label: string;
 }

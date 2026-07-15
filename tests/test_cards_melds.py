@@ -102,6 +102,28 @@ def test_joker_set_representation_targets_missing_suit():
     assert m.represents[99].rank == 7
 
 
+def test_joker_set_suit_unresolved_when_two_suits_missing():
+    # A♠ A♥ + Joker: the joker could be A♦ or A♣, so its suit stays unresolved
+    # (issue #3 / §3.9) while its rank (and thus point value) is fixed.
+    cards = [card(S, 1), card(H, 1), joker(99)]
+    m = Meld(0, MeldKind.SET, cards, 0)
+    assert m.represents[99].rank == 1
+    assert m.represents[99].suit is None
+    assert cards_points(cards, MeldKind.SET) == 33  # still valued as three Aces
+
+
+def test_unresolved_joker_is_not_recoverable_then_resolves_on_add():
+    # While two suits are missing the joker matches no concrete card; once a third
+    # suit is added only one remains, so the joker resolves and becomes recoverable.
+    m = Meld(0, MeldKind.SET, [card(S, 7), card(H, 7), joker(99)], 0)
+    assert m.represents[99].suit is None
+    assert not repr_matches_card(m.represents[99], card(D, 7))
+    m.cards.append(card(D, 7))
+    m.refresh()
+    assert m.represents[99].suit == C  # only clubs left -> resolved
+    assert repr_matches_card(m.represents[99], card(C, 7))
+
+
 def test_meld_points_counts_joker_as_represented_card():
     # K K K + joker(=4th King) -> 10*4 = 40
     cards = [card(H, 13), card(D, 13), card(C, 13), joker()]

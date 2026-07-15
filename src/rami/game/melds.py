@@ -31,10 +31,15 @@ class MeldKind(StrEnum):
 
 @dataclass(frozen=True)
 class ReprCard:
-    """The concrete card a joker currently stands in for."""
+    """The card a joker currently stands in for.
 
-    suit: Suit
+    `suit` is None while the joker's suit is still ambiguous — e.g. a set with
+    two or more suits missing (§3.9): the rank is fixed but which suit the joker
+    represents is not yet determined. An unresolved joker cannot be recovered
+    until its suit is pinned down."""
+
     rank: int  # 1..14 (14 = Ace high)
+    suit: Suit | None = None
 
 
 @dataclass
@@ -244,15 +249,18 @@ def _set_joker_reprs(cards: list[Card]) -> dict[int, ReprCard]:
     for c in real:
         assert c.suit is not None
         per_suit[c.suit] += 1
-    # Open slots, missing suits first, then second-deck copies.
-    open_slots: list[Suit] = []
-    for copy in range(NUM_DECKS):
-        for suit in ALL_SUITS:
-            if per_suit[suit] <= copy:
-                open_slots.append(suit)
+    missing = [suit for suit in ALL_SUITS if per_suit[suit] == 0]
+    # A joker's suit is only *determined* when the jokers must collectively cover
+    # every still-missing suit (§3.9). With fewer jokers than missing suits, which
+    # suit each joker stands for is ambiguous (e.g. A♠ A♥ + Joker → "A♦ or A♣"), so
+    # the suit is left unresolved until an added card pins it down. Any jokers
+    # beyond the missing suits are second-deck copies whose suit is likewise
+    # ambiguous. Every joker still carries the rank, so its point value is exact.
+    determined = missing if len(jokers) >= len(missing) else []
     out: dict[int, ReprCard] = {}
-    for joker, suit in zip(jokers, open_slots, strict=False):
-        out[joker.id] = ReprCard(suit=suit, rank=rank)
+    for i, joker in enumerate(jokers):
+        suit = determined[i] if i < len(determined) else None
+        out[joker.id] = ReprCard(rank=rank, suit=suit)
     return out
 
 
@@ -270,7 +278,9 @@ def _run_joker_reprs(cards: list[Card]) -> dict[int, ReprCard]:
 
 def repr_matches_card(rep: ReprCard, card: Card) -> bool:
     """Does `card` (a real card) match what a joker represents?"""
-    if card.is_joker or card.suit != rep.suit:
+    # An unresolved joker (suit still ambiguous) matches no concrete card, so it
+    # cannot be recovered until its suit is pinned down (§3.9).
+    if rep.suit is None or card.is_joker or card.suit != rep.suit:
         return False
     if rep.rank == RANK_ACE_HIGH:
         return card.rank == RANK_ACE

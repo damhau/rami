@@ -114,7 +114,7 @@ export type ClientMessage =
   | { type: "claim_free_card" }
   | { type: "pass_free_card" }
   | { type: "lay_melds"; melds: { kind: MeldKind; card_ids: number[] }[] }
-  | { type: "lay_off"; meld_id: number; card_id: number }
+  | { type: "lay_off"; meld_id: number; card_id: number; as_rank?: number | null }
   | { type: "recover_joker"; meld_id: number; card_id: number }
   | { type: "discard"; card_id: number }
   | { type: "return_discard" }

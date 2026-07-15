@@ -220,6 +220,14 @@ def is_valid_run(cards: list[Card]) -> bool:
     return arrange_run(cards) is not None
 
 
+def is_valid_run_order(cards: list[Card]) -> bool:
+    """True if `cards` are *already* in a valid left-to-right run order.
+
+    Lets the caller honour a player's chosen ordering — and therefore where each
+    joker sits (§3.9) — instead of canonicalizing to the lowest arrangement."""
+    return _run_start(cards) is not None
+
+
 def is_valid_meld(kind: MeldKind, cards: list[Card]) -> bool:
     return is_valid_set(cards) if kind == MeldKind.SET else is_valid_run(cards)
 
@@ -316,10 +324,28 @@ def cards_points(cards: list[Card], kind: MeldKind) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def try_lay_off(meld: Meld, card: Card) -> list[Card] | None:
-    """Return the new card list if `card` legally extends `meld`, else None."""
+def try_lay_off(meld: Meld, card: Card, as_rank: int | None = None) -> list[Card] | None:
+    """Return the new card list if `card` legally extends `meld`, else None.
+
+    For a joker laid onto a run, `as_rank` chooses which end it extends (the rank
+    it should represent) — so a player can add a joker on the high side instead of
+    always the lowest (§3.9 / issue #11). It is ignored for sets and real cards."""
     if meld.kind == MeldKind.SET:
         candidate = [*meld.cards, card]
         return candidate if is_valid_set(candidate) else None
-    # Run: re-order the combined cards so the result stays a valid sequence.
+    # Run with an explicit joker placement: put the joker at the chosen end and
+    # keep that order if it forms a valid run.
+    if card.is_joker and as_rank is not None:
+        start = _run_start(meld.cards)
+        if start is None:
+            return None
+        end = start + len(meld.cards) - 1
+        if as_rank == end + 1:
+            candidate = [*meld.cards, card]
+        elif as_rank == start - 1:
+            candidate = [card, *meld.cards]
+        else:
+            return None
+        return candidate if is_valid_run_order(candidate) else None
+    # Otherwise re-order the combined cards so the result stays a valid sequence.
     return arrange_run([*meld.cards, card])

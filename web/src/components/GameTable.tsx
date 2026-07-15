@@ -18,9 +18,16 @@ import { CSS } from "@dnd-kit/utilities";
 import type { CardView, MeldView, Snapshot } from "../types";
 import { useStore } from "../store";
 import { t, contractLabel, meldKindLabel } from "../i18n";
-import { detectMeld, meldPoints } from "../lib/melds";
+import {
+  canBeSet,
+  jokerRunLayOffRanks,
+  meldPoints,
+  runOptions,
+  type RunOption,
+} from "../lib/melds";
 import { Button } from "./ui/button";
 import { CardBack, PlayingCard } from "./PlayingCard";
+import { MeldKindDialog, JokerEndDialog } from "./MeldPicker";
 import { cn } from "../lib/utils";
 
 /** One hand card wired for drag-to-reorder while still handling tap-to-select. */
@@ -65,6 +72,16 @@ export function GameTable({ snap }: { snap: Snapshot }) {
   const { selected, tray, send, toggleSelect, addTrayGroup, clearTray, handOrder, setHandOrder } =
     useStore();
   const [meldHint, setMeldHint] = useState<string | null>(null);
+  // Ambiguous meld (set vs run, or joker placement) awaiting the player's choice.
+  const [meldChoice, setMeldChoice] = useState<{
+    cards: CardView[];
+    setValid: boolean;
+    runOpts: RunOption[];
+  } | null>(null);
+  // A joker lay-off onto a run that can extend either end (#11).
+  const [jokerEnd, setJokerEnd] = useState<{ meldId: number; cardId: number; ranks: number[] } | null>(
+    null,
+  );
   const me = snap.you;
   const mine = snap.players[me];
   const opponents = snap.players.filter((p) => p.seat !== me);
@@ -114,7 +131,25 @@ export function GameTable({ snap }: { snap: Snapshot }) {
   };
 
   const layOff = (meld: MeldView) => {
-    if (layOffMode) send({ type: "lay_off", meld_id: meld.id, card_id: selected[0] });
+    if (!layOffMode) return;
+    const cardId = selected[0];
+    const card = snap.your_hand.find((c) => c.id === cardId);
+    // Laying a joker onto a run can extend either end — ask which (#11).
+    if (card?.is_joker && meld.kind === "run") {
+      const ranks = meld.cards.map((c) =>
+        c.is_joker ? (meld.reprs[c.id]?.rank ?? 0) : (c.rank ?? 0),
+      );
+      const ends = jokerRunLayOffRanks(ranks);
+      if (ends.length > 1) {
+        setJokerEnd({ meldId: meld.id, cardId, ranks: ends });
+        return;
+      }
+      if (ends.length === 1) {
+        send({ type: "lay_off", meld_id: meld.id, card_id: cardId, as_rank: ends[0] });
+        return;
+      }
+    }
+    send({ type: "lay_off", meld_id: meld.id, card_id: cardId });
   };
   const recoverJoker = (meld: MeldView) => {
     if (canAct && goneOut && selected.length === 1)
@@ -125,13 +160,39 @@ export function GameTable({ snap }: { snap: Snapshot }) {
     const cards = selected
       .map((id) => snap.your_hand.find((c) => c.id === id))
       .filter((c): c is CardView => c !== undefined);
-    const detected = detectMeld(cards);
-    if (!detected) {
-      setMeldHint(cards.length < 3 ? t.game.tooFewCards : t.game.notAMeld);
+    if (cards.length < 3) {
+      setMeldHint(t.game.tooFewCards);
+      return;
+    }
+    const setValid = canBeSet(cards);
+    const runOpts = runOptions(cards);
+    if (!setValid && runOpts.length === 0) {
+      setMeldHint(t.game.notAMeld);
       return;
     }
     setMeldHint(null);
-    addTrayGroup(detected);
+    // Unambiguous: one kind, one arrangement -> stage it directly.
+    if (setValid && runOpts.length === 0) {
+      addTrayGroup({ kind: "set", card_ids: cards.map((c) => c.id) });
+      return;
+    }
+    if (!setValid && runOpts.length === 1) {
+      addTrayGroup({ kind: "run", card_ids: runOpts[0].card_ids });
+      return;
+    }
+    // Ambiguous (set vs run, and/or multiple joker placements) -> ask (#2, #9).
+    setMeldChoice({ cards, setValid, runOpts });
+  };
+
+  const pickMeld = (kind: "set" | "run", cardIds: number[]) => {
+    addTrayGroup({ kind, card_ids: cardIds });
+    setMeldChoice(null);
+  };
+
+  const pickJokerEnd = (asRank: number) => {
+    if (jokerEnd)
+      send({ type: "lay_off", meld_id: jokerEnd.meldId, card_id: jokerEnd.cardId, as_rank: asRank });
+    setJokerEnd(null);
   };
 
   const layDown = () => {
@@ -478,6 +539,23 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </Button>
         </div>
       </div>
+
+      {meldChoice && (
+        <MeldKindDialog
+          cards={meldChoice.cards}
+          setValid={meldChoice.setValid}
+          runOptions={meldChoice.runOpts}
+          onPick={pickMeld}
+          onCancel={() => setMeldChoice(null)}
+        />
+      )}
+      {jokerEnd && (
+        <JokerEndDialog
+          ranks={jokerEnd.ranks}
+          onPick={pickJokerEnd}
+          onCancel={() => setJokerEnd(null)}
+        />
+      )}
     </div>
   );
 }

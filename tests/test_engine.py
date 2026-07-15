@@ -314,6 +314,47 @@ def test_go_out_must_use_card_taken_from_discard():
 # --------------------------------------------------------------------------- #
 
 
+def test_lay_melds_respects_chosen_joker_position_in_run():
+    # Round 2 wants a run of 4. J-Q-K + joker: the player chooses where the joker
+    # sits by the order they send — the engine must honour it, not force the
+    # lowest arrangement (§3.9 / issue #2).
+    hand = [card(D, 11, 1), card(D, 12, 2), card(D, 13, 3), joker(4), *_filler(9)]
+    g = two_player_state(hand, _filler(13), round_no=2)
+    # [J, Q, K, joker] -> joker at the high end = Ace.
+    g_hi, _ = apply(g, LayMelds(0, [MeldSpec(RUN, [1, 2, 3, 4])]))
+    assert g_hi.table_melds[0].represents[4].rank == 14  # high Ace, not the 10
+    # [joker, J, Q, K] -> joker at the low end = 10.
+    g_lo, _ = apply(g, LayMelds(0, [MeldSpec(RUN, [4, 1, 2, 3])]))
+    assert g_lo.table_melds[0].represents[4].rank == 10
+
+
+def test_lay_off_joker_onto_run_extends_chosen_end():
+    # Issue #11: adding a joker to 5-6-7-8 should be able to extend the *high* end
+    # (joker = 9), not always the lowest (joker = 4).
+    m = Meld(0, RUN, [card(D, 5, 1), card(D, 6, 2), card(D, 7, 3), card(D, 8, 4)], 0)
+    g = two_player_state([joker(9), card(S, 2, 10)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    # Explicit high-end placement.
+    g_hi, _ = apply(g, LayOff(0, 0, 9, as_rank=9))
+    assert g_hi.table_melds[0].represents[9].rank == 9
+    # Explicit low-end placement.
+    g_lo, _ = apply(g, LayOff(0, 0, 9, as_rank=4))
+    assert g_lo.table_melds[0].represents[9].rank == 4
+    # No hint -> the previous default (lowest) is unchanged.
+    g_def, _ = apply(g, LayOff(0, 0, 9))
+    assert g_def.table_melds[0].represents[9].rank == 4
+
+
+def test_lay_off_joker_rejects_non_adjacent_rank():
+    m = Meld(0, RUN, [card(D, 5, 1), card(D, 6, 2), card(D, 7, 3), card(D, 8, 4)], 0)
+    g = two_player_state([joker(9), card(S, 2, 10)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    with pytest.raises(IllegalMove):
+        apply(g, LayOff(0, 0, 9, as_rank=11))  # 11 is not an end of 5-6-7-8
+
+
 def test_lay_off_requires_having_gone_out():
     m = Meld(0, SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 0)
     g = two_player_state([card(C, 9, 5), card(S, 2, 6)], round_no=1, gone_out0=False)

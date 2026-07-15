@@ -31,6 +31,7 @@ from .melds import (
     MeldKind,
     arrange_run,
     cards_points,
+    is_valid_run_order,
     meld_points,
     repr_matches_card,
     try_lay_off,
@@ -288,9 +289,10 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
             seen.add(cid)
             cards.append(_hand_card(player, cid))
         validate_meld(spec.kind, cards)
-        if spec.kind == MeldKind.RUN:
-            # Accept the cards in any order; canonicalize the run so joker
-            # representations and the table display come out right.
+        if spec.kind == MeldKind.RUN and not is_valid_run_order(cards):
+            # The player's order isn't itself a valid run, so canonicalize it to
+            # the lowest arrangement. When their order *is* already valid we keep
+            # it, honouring where they placed each joker (§3.9 / issue #2).
             arranged = arrange_run(cards)
             assert arranged is not None  # validate_meld just passed
             cards = arranged
@@ -382,7 +384,7 @@ def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
     if joker_idx is not None:
         _do_recover_joker(s, player, meld, joker_idx, card, events)
         return
-    new_cards = try_lay_off(meld, card)
+    new_cards = try_lay_off(meld, card, intent.as_rank)
     if new_cards is None:
         raise IllegalMove(f"{card.label} cannot extend that meld")
     # A turn must end on a discard (§3.10): never lay off your last card.

@@ -65,6 +65,7 @@ class LayOffMsg(_Base):
     type: Literal["lay_off"]
     meld_id: int
     card_id: int
+    as_rank: int | None = None  # for a joker onto a run: the rank it represents (#11)
 
 
 class RecoverJokerMsg(_Base):
@@ -129,7 +130,7 @@ def to_engine_intent(seat: int, msg: ClientMessage) -> Intent | None:
         case LayMeldsMsg():
             return LayMelds(seat, [MeldSpec(kind=m.kind, card_ids=m.card_ids) for m in msg.melds])
         case LayOffMsg():
-            return LayOff(seat, msg.meld_id, msg.card_id)
+            return LayOff(seat, msg.meld_id, msg.card_id, msg.as_rank)
         case RecoverJokerMsg():
             return RecoverJoker(seat, msg.meld_id, msg.card_id)
         case DiscardMsg():

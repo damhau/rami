@@ -210,7 +210,9 @@ def _schedule_idle(session: GameSession) -> None:
     task = asyncio.create_task(_idle_timeout(session, seat, session.decision_nonce, delay))
     _idle_tasks[session.code] = task
     task.add_done_callback(
-        lambda t: _idle_tasks.pop(session.code, None) if _idle_tasks.get(session.code) is t else None
+        lambda t: (
+            _idle_tasks.pop(session.code, None) if _idle_tasks.get(session.code) is t else None
+        )
     )
 
 

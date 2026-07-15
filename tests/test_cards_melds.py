@@ -45,13 +45,9 @@ def test_set_duplicate_suit_requires_all_suits_present():
     # (DESIGN.md §3.9). A bare triplet with a duplicate suit is invalid.
     assert not is_valid_set([card(S, 8), card(S, 8), card(H, 8)])
     # Once all four suits are down, a second-deck copy is fine.
-    assert is_valid_set(
-        [card(S, 7), card(H, 7), card(D, 7), card(C, 7), card(S, 7)]
-    )
+    assert is_valid_set([card(S, 7), card(H, 7), card(D, 7), card(C, 7), card(S, 7)])
     # A joker can stand in for a missing suit, unlocking the double.
-    assert is_valid_set(
-        [card(S, 6), card(S, 6), card(H, 6), card(D, 6), joker()]
-    )
+    assert is_valid_set([card(S, 6), card(S, 6), card(H, 6), card(D, 6), joker()])
     # ...but not when suits are still missing (joker only covers one).
     assert not is_valid_set([card(S, 8), card(S, 8), card(H, 8), joker()])
 

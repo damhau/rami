@@ -1,3 +1,9 @@
+## v0.10.0 (2026-07-19)
+
+### Feat
+
+- **ai**: lay jokers in the most valuable recoverable slot (#15)
+
 ## v0.9.0 (2026-07-19)
 
 ### Feat

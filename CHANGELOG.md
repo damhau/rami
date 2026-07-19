@@ -1,3 +1,13 @@
+## v0.8.0 (2026-07-19)
+
+### Feat
+
+- **ai**: opponent-aware discarding
+
+### Fix
+
+- **ai**: lay off the highest-penalty card first so a joker is never the forced final discard
+
 ## v0.7.1 (2026-07-19)
 
 ### Fix

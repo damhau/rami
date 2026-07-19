@@ -141,6 +141,24 @@ def test_bot_lays_off_a_placeable_card_instead_of_discarding():
     assert isinstance(next_bot_intent(g2, 0), Discard)
 
 
+def test_bot_lays_off_the_joker_and_discards_the_cheap_card():
+    # Issue #14: with a set of 2s on the table (missing ♣) and [JOKER, 2♣] in
+    # hand, both cards are placeable but one must be kept back for the mandatory
+    # discard (§3.10). The joker (25 pts) must be laid off first so the forced
+    # final discard is the cheap 2♣ — not the other way around.
+    from rami.game.intents import LayOff
+    from rami.game.melds import Meld
+
+    m = Meld(0, MeldKind.SET, [card(S, 2, 1), card(H, 2, 2), card(D, 2, 3)], 1)
+    g = two_player_state([joker(10), card(C, 2, 11)], [card(D, 9, 20)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    intent = next_bot_intent(g, 0)
+    assert intent == LayOff(0, 0, 10)  # the joker, not the 2♣
+    g2, _ = apply(g, intent)
+    assert isinstance(next_bot_intent(g2, 0), Discard)  # only the 2♣ is left
+
+
 def test_bot_does_not_take_a_discard_it_cannot_use():
     # Issue #16 (livelock): gone out with [A♠, A♥], the A♦ on the discard forms a
     # set — but laying it would use the whole hand, which §3.10 forbids, so the

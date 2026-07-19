@@ -230,19 +230,18 @@ def _use_taken_card(state: GameState, p: PlayerState, taken_id: int) -> Intent |
 def _find_post_go_out_move(state: GameState, p: PlayerState) -> Intent | None:
     """Shed one more card onto the table, if possible without emptying the hand.
 
-    Prefer laying off a real card, then a joker (never discard a card that has a
-    legal table play — issue #5, §3.9), then a fresh supplementary meld. Always
-    leaves at least one card so the turn can end on a discard (§3.10)."""
+    Prefer laying off the highest-penalty card first (never discard a card that
+    has a legal table play — issue #5, §3.9), then a fresh supplementary meld.
+    Always leaves at least one card so the turn can end on a discard (§3.10)."""
     if len(p.hand) <= 1:
         return None  # must keep the last card to discard
-    # Lay off real cards first, then jokers (a joker discarded costs a flat 25).
-    for want_joker in (False, True):
-        for card in p.hand:
-            if card.is_joker != want_joker:
-                continue
-            for meld in state.table_melds:
-                if try_lay_off(meld, card) is not None:
-                    return LayOff(p.seat, meld.id, card.id)
+    # Exactly one card is kept back for the mandatory discard, so lay off the
+    # most expensive placeable card first — a placeable joker must never end up
+    # as the forced final discard (issue #14: that hands 25 pts to the pile).
+    for card in sorted(p.hand, key=card_hand_value, reverse=True):
+        for meld in state.table_melds:
+            if try_lay_off(meld, card) is not None:
+                return LayOff(p.seat, meld.id, card.id)
     # Otherwise lay a fresh meld if one is available (and it leaves a spare).
     for kind, cards in _greedy_melds(p.hand):
         if len(cards) < len(p.hand):

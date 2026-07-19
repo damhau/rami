@@ -1,3 +1,9 @@
+## v0.9.0 (2026-07-19)
+
+### Feat
+
+- **ai**: place run jokers in the most valuable slot (#17)
+
 ## v0.8.0 (2026-07-19)
 
 ### Feat

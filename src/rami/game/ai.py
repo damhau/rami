@@ -256,9 +256,19 @@ def _find_post_go_out_move(state: GameState, p: PlayerState) -> Intent | None:
 
 
 def _out_can_use(state: GameState, p: PlayerState, card: Card) -> bool:
-    if any(try_lay_off(meld, card) is not None for meld in state.table_melds):
+    """Can the taken discard actually be used this turn?
+
+    Must mirror `_use_taken_card` exactly — including the keep-a-card-to-discard
+    rule (§3.10) — otherwise the bot takes a card, finds it cannot lay it, returns
+    it, and repeats forever (the DrawDiscard ↔ ReturnDiscard livelock, issue #16).
+    """
+    hand_after = len(p.hand) + 1  # hand size once the card is taken
+    if hand_after > 1 and any(try_lay_off(meld, card) is not None for meld in state.table_melds):
         return True
-    return any(card.id in {c.id for c in cs} for _, cs in _all_candidates([*p.hand, card]))
+    return any(
+        card.id in {c.id for c in cs} and len(cs) < hand_after
+        for _, cs in _all_candidates([*p.hand, card])
+    )
 
 
 def _should_take_discard(state: GameState, p: PlayerState) -> bool:

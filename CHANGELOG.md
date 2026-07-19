@@ -1,3 +1,10 @@
+## v0.7.1 (2026-07-19)
+
+### Fix
+
+- bot livelock taking a discard it can never lay (#16)
+- **web**: show the free-card prompt as a dock banner so it doesn't hide the table (#13)
+
 ## v0.7.0 (2026-07-15)
 
 ### Feat

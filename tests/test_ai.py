@@ -208,6 +208,64 @@ def test_bot_lays_off_the_joker_and_discards_the_cheap_card():
     assert isinstance(next_bot_intent(g2, 0), Discard)  # only the 2♣ is left
 
 
+def test_bot_lays_the_joker_in_a_recoverable_slot_not_a_full_set():
+    # Issue #15: the set of 2s already holds all four suits — a joker there is
+    # worth 2 points and can never be recovered (ambiguous second-deck copy).
+    # The run's high end makes it a reclaimable K♠ worth 10, so it must go
+    # there even though the full set comes first on the table.
+    from rami.game.intents import LayOff
+    from rami.game.melds import Meld, ReprCard
+
+    full_set = Meld(
+        0, MeldKind.SET, [card(S, 2, 1), card(H, 2, 2), card(D, 2, 3), card(C, 2, 4)], 1
+    )
+    run = Meld(1, MeldKind.RUN, [card(S, 9, 5), card(S, 10, 6), card(S, 11, 7), card(S, 12, 8)], 1)
+    g = two_player_state([joker(10), card(D, 7, 11)], [card(D, 9, 20)], round_no=1, gone_out0=True)
+    g.table_melds = [full_set, run]
+    g.next_meld_id = 2
+    intent = next_bot_intent(g, 0)
+    assert intent == LayOff(0, 1, 10, as_rank=13)  # the run's high end, not the buried 2
+    g2, _ = apply(g, intent)
+    run_after = next(m for m in g2.table_melds if m.id == 1)
+    assert run_after.represents[10] == ReprCard(rank=13, suit=S)  # a recoverable K♠
+
+
+def test_bot_prefers_a_recoverable_set_over_an_all_suits_set():
+    # Issue #15: two sets of Ks — in the first (all four suits) the joker would
+    # be stuck forever; in the second (♣ missing) it becomes the K♣ and can be
+    # reclaimed by laying the real K♣. Same point value, so recoverability wins.
+    from rami.game.intents import LayOff
+    from rami.game.melds import Meld, ReprCard
+
+    full_set = Meld(
+        0, MeldKind.SET, [card(S, 13, 1), card(H, 13, 2), card(D, 13, 3), card(C, 13, 4)], 1
+    )
+    open_set = Meld(1, MeldKind.SET, [card(S, 13, 5), card(H, 13, 6), card(D, 13, 7)], 1)
+    g = two_player_state([joker(10), card(D, 4, 11)], [card(D, 9, 20)], round_no=1, gone_out0=True)
+    g.table_melds = [full_set, open_set]
+    g.next_meld_id = 2
+    intent = next_bot_intent(g, 0)
+    assert intent == LayOff(0, 1, 10)  # the open set, not the first-listed full one
+    g2, _ = apply(g, intent)
+    set_after = next(m for m in g2.table_melds if m.id == 1)
+    assert set_after.represents[10] == ReprCard(rank=13, suit=C)  # pinned as the K♣
+
+
+def test_bot_still_buries_the_joker_when_only_a_full_set_exists():
+    # Issue #15's last resort: with no better slot anywhere, shedding the joker
+    # into an all-suits set still beats holding it (25 pts in hand, §3.2).
+    from rami.game.intents import LayOff
+    from rami.game.melds import Meld
+
+    full_set = Meld(
+        0, MeldKind.SET, [card(S, 2, 1), card(H, 2, 2), card(D, 2, 3), card(C, 2, 4)], 1
+    )
+    g = two_player_state([joker(10), card(D, 7, 11)], [card(D, 9, 20)], round_no=1, gone_out0=True)
+    g.table_melds = [full_set]
+    g.next_meld_id = 1
+    assert next_bot_intent(g, 0) == LayOff(0, 0, 10)
+
+
 def test_bot_does_not_take_a_discard_it_cannot_use():
     # Issue #16 (livelock): gone out with [A♠, A♥], the A♦ on the discard forms a
     # set — but laying it would use the whole hand, which §3.10 forbids, so the

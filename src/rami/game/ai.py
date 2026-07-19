@@ -20,13 +20,25 @@ Strategy:
   window, so a joker sits in the deliberately chosen slot — the engine honours
   a valid order (§3.9 / issue #2) — and the highest-value window wins instead
   of arrange_run's lowest default (issue #17).
+- Joker lay-offs: a joker laid onto the table goes to the most valuable
+  *recoverable* slot (a run end, or a set still missing suits) and is only
+  buried in an all-suits set — ambiguous, unrecoverable — as a last resort
+  (issue #15).
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 
-from .cards import ALL_SUITS, MIN_RANK, RANK_ACE, RANK_ACE_HIGH, Card, card_hand_value
+from .cards import (
+    ALL_SUITS,
+    MIN_RANK,
+    RANK_ACE,
+    RANK_ACE_HIGH,
+    Card,
+    card_hand_value,
+    rank_points,
+)
 from .contracts import Requirement, contract_for
 from .intents import (
     ClaimFreeCard,
@@ -46,6 +58,8 @@ from .melds import (
     cards_points,
     is_valid_run_order,
     is_valid_set,
+    joker_representations,
+    run_bounds,
     try_lay_off,
 )
 from .state import GameState, Phase, PlayerState
@@ -223,6 +237,50 @@ def _find_go_out(state: GameState, p: PlayerState) -> Intent | None:
 # --------------------------------------------------------------------------- #
 
 
+def _best_lay_off(state: GameState, seat: int, card: Card) -> LayOff | None:
+    """The best legal lay-off of `card` onto a table meld, or None.
+
+    A real card plays the same wherever it fits, so the first accepting meld
+    wins. A joker's slot matters (issue #15): prefer the placement where it is
+    *recoverable* (§3.9 — the represented card is unambiguous, so laying the
+    real card reclaims it) and worth the most points — a run end, or a set
+    still missing suits. A set that already holds all four suits pins the joker
+    as an ambiguous second-deck copy forever, so it is only a last resort.
+
+    Feasibility is exactly `try_lay_off(meld, card)` over the table (the `None`
+    option below), matching `_out_can_use` — the extra explicit run ends only
+    widen the choice of slot, never whether a lay-off exists (issue #16).
+    """
+    if not card.is_joker:
+        for meld in state.table_melds:
+            if try_lay_off(meld, card) is not None:
+                return LayOff(seat, meld.id, card.id)
+        return None
+
+    best_score = -1
+    best: LayOff | None = None
+    for meld in state.table_melds:
+        # For a run, name each end explicitly — high end first so it wins ties.
+        options: tuple[int | None, ...] = (None,)
+        if meld.kind == MeldKind.RUN:
+            bounds = run_bounds(meld.cards)
+            if bounds is not None:
+                start, end = bounds
+                options = (end + 1, start - 1, None)
+        for as_rank in options:
+            new_cards = try_lay_off(meld, card, as_rank)
+            if new_cards is None:
+                continue
+            rep = joker_representations(meld.kind, new_cards).get(card.id)
+            value = rank_points(rep.rank) if rep is not None else 0
+            recoverable = rep is not None and rep.suit is not None
+            score = value + (100 if recoverable else 0)
+            if score > best_score:
+                best_score = score
+                best = LayOff(seat, meld.id, card.id, as_rank=as_rank)
+    return best
+
+
 def _use_taken_card(state: GameState, p: PlayerState, taken_id: int) -> Intent | None:
     """Lay the just-taken discard card (lay-off, else a fresh meld). Only used
     after going out — the taken card is otherwise handled by the go-out search.
@@ -231,9 +289,9 @@ def _use_taken_card(state: GameState, p: PlayerState, taken_id: int) -> Intent |
     if card is None:
         return None
     if len(p.hand) > 1:
-        for meld in state.table_melds:
-            if try_lay_off(meld, card) is not None:
-                return LayOff(p.seat, meld.id, taken_id)
+        lay = _best_lay_off(state, p.seat, card)
+        if lay is not None:
+            return lay
     for kind, cs in _all_candidates(p.hand):
         if taken_id in {c.id for c in cs} and len(cs) < len(p.hand):
             return LayMelds(p.seat, [MeldSpec(kind=kind, card_ids=[c.id for c in cs])])
@@ -250,11 +308,12 @@ def _find_post_go_out_move(state: GameState, p: PlayerState) -> Intent | None:
         return None  # must keep the last card to discard
     # Exactly one card is kept back for the mandatory discard, so lay off the
     # most expensive placeable card first — a placeable joker must never end up
-    # as the forced final discard (issue #14: that hands 25 pts to the pile).
+    # as the forced final discard (issue #14: that hands 25 pts to the pile) —
+    # into its best slot on the table (issue #15).
     for card in sorted(p.hand, key=card_hand_value, reverse=True):
-        for meld in state.table_melds:
-            if try_lay_off(meld, card) is not None:
-                return LayOff(p.seat, meld.id, card.id)
+        lay = _best_lay_off(state, p.seat, card)
+        if lay is not None:
+            return lay
     # Otherwise lay a fresh meld if one is available (and it leaves a spare).
     for kind, cards in _greedy_melds(p.hand):
         if len(cards) < len(p.hand):

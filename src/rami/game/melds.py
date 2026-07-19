@@ -228,6 +228,17 @@ def is_valid_run_order(cards: list[Card]) -> bool:
     return _run_start(cards) is not None
 
 
+def run_bounds(cards: list[Card]) -> tuple[int, int] | None:
+    """The (start, end) ranks of an ordered run, or None if not a valid order.
+
+    Table runs are stored in order, so this gives the ranks a lay-off could
+    extend: `start - 1` on the low side, `end + 1` on the high side."""
+    start = _run_start(cards)
+    if start is None:
+        return None
+    return start, start + len(cards) - 1
+
+
 def is_valid_meld(kind: MeldKind, cards: list[Card]) -> bool:
     return is_valid_set(cards) if kind == MeldKind.SET else is_valid_run(cards)
 

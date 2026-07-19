@@ -375,22 +375,31 @@ export function GameTable({ snap }: { snap: Snapshot }) {
         </div>
         )}
 
-        {/* free-card prompt */}
+      </div>
+      </div>
+
+      {/* ---------------- player dock (pinned; hand + actions always reachable) ---------------- */}
+      <div
+        className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+      >
+        {/* free-card prompt — an inline banner in the dock (not a felt overlay),
+            so it never hides the table melds while you decide (issue #13). */}
         {freeForMe && (
-          <div className="absolute inset-x-0 bottom-16 flex justify-center">
-            <div className="flex items-center gap-3 rounded-xl border border-gold/40 bg-ink/90 px-4 py-2.5 shadow-2xl">
-              <span className="text-sm">
-                {(() => {
-                  const [pre, label, post] = t.game.freePrompt(snap.discard_top?.label ?? "");
-                  return (
-                    <>
-                      {pre}
-                      <b>{label}</b>
-                      {post}
-                    </>
-                  );
-                })()}
-              </span>
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-gold/40 bg-gold/10 px-3 py-2 text-sm">
+            <span className="min-w-0 flex-1">
+              {(() => {
+                const [pre, label, post] = t.game.freePrompt(snap.discard_top?.label ?? "");
+                return (
+                  <>
+                    {pre}
+                    <b className="text-gold">{label}</b>
+                    {post}
+                  </>
+                );
+              })()}
+            </span>
+            <div className="flex shrink-0 gap-2">
               <Button size="sm" onClick={() => send({ type: "claim_free_card" })}>
                 {t.game.claim}
               </Button>
@@ -401,14 +410,6 @@ export function GameTable({ snap }: { snap: Snapshot }) {
           </div>
         )}
 
-      </div>
-      </div>
-
-      {/* ---------------- player dock (pinned; hand + actions always reachable) ---------------- */}
-      <div
-        className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4"
-        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
-      >
         {mustLayTaken && (
           <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-200">
             <span className="min-w-0 flex-1">{t.game.mustLayTaken}</span>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from conftest import C, D, H, S, card, joker, three_player_state, two_player_state
 from rami.game.ai import _meld_points, next_bot_intent
+from rami.game.cards import RANK_ACE_HIGH
 from rami.game.engine import apply, new_game, start_round
 from rami.game.intents import ClaimFreeCard, Discard, DrawDiscard, DrawStock, LayMelds
 from rami.game.melds import MeldKind, arrange_run, cards_points
@@ -95,12 +96,60 @@ def test_bot_claims_a_free_card_that_completes_a_meld():
 
 
 def test_bot_scores_runs_like_the_engine():
-    # A joker in Q-K-? is valued by the engine as the Jack (cheapest arrangement),
-    # not the Ace. The bot must agree, or it will try an illegal go-out.
-    cards = [card(S, 12, 1), card(S, 13, 2), joker(3)]
-    arranged = arrange_run(cards)
+    # The engine keeps a run sent in a valid explicit order — Q-K-★ makes the
+    # joker the Ace high (issue #2) — and canonicalizes any other order to the
+    # lowest arrangement. The bot's valuation must agree in both cases, or it
+    # will mis-judge go-outs (issue #17).
+    ordered = [card(S, 12, 1), card(S, 13, 2), joker(3)]
+    assert _meld_points(MeldKind.RUN, ordered) == cards_points(ordered, MeldKind.RUN) == 31
+    shuffled = [joker(3), card(S, 13, 2), card(S, 12, 1)]  # not a valid order
+    arranged = arrange_run(shuffled)
     assert arranged is not None
-    assert _meld_points(MeldKind.RUN, cards) == cards_points(arranged, MeldKind.RUN) == 30
+    assert _meld_points(MeldKind.RUN, shuffled) == cards_points(arranged, MeldKind.RUN) == 30
+
+
+def test_bot_goes_out_by_placing_the_run_joker_at_the_high_end():
+    # Issue #17: 3-3-3 (9 pts) + Q♣ K♣ ★. Valued with the joker low (J-Q-K) the
+    # run is 30 and the total 39 — no go-out. Placed deliberately as Q-K-A it is
+    # 31 and the total exactly 40, so the bot must order the run to go out.
+    hand = [
+        card(S, 3, 1),
+        card(H, 3, 2),
+        card(D, 3, 3),
+        card(C, 12, 4),
+        card(C, 13, 5),
+        joker(6),
+        card(H, 8, 7),  # spare kept back for the mandatory discard (§3.10)
+    ]
+    g = two_player_state(hand, _no_meld_filler(9), round_no=1)  # await_discard
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, LayMelds)
+    g2, _ = apply(g, intent)
+    assert g2.players[0].has_gone_out
+    run = next(m for m in g2.table_melds if m.kind == MeldKind.RUN)
+    assert run.represents[6].rank == RANK_ACE_HIGH  # the joker is the Ace, not the Jack
+
+
+def test_bot_prefers_the_higher_window_for_run_jokers():
+    # Issue #17: 5-5-5 (15 pts) + K♣ ★ ★. Sent unordered, [K,★,★] canonicalizes
+    # to J-Q-K (jokers worth 20); ordered as ★-K-★ (Q-K-A) they are worth 21 and
+    # the high end stays recoverable. The bot must send the higher window.
+    hand = [
+        card(S, 5, 1),
+        card(H, 5, 2),
+        card(D, 5, 3),
+        card(C, 13, 4),
+        joker(5),
+        joker(6),
+        card(H, 2, 7),  # spare kept back for the mandatory discard (§3.10)
+    ]
+    g = two_player_state(hand, _no_meld_filler(9), round_no=1)  # await_discard
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, LayMelds)
+    g2, _ = apply(g, intent)
+    assert g2.players[0].has_gone_out
+    run = next(m for m in g2.table_melds if m.kind == MeldKind.RUN)
+    assert sorted(r.rank for r in run.represents.values()) == [12, RANK_ACE_HIGH]
 
 
 def test_bot_never_produces_an_illegal_move_across_many_deals():

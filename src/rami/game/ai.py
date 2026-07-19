@@ -16,6 +16,10 @@ Strategy:
   near-runs) and sheds the least useful one, breaking ties by shedding points.
   Once an opponent has gone out it avoids discarding cards they can lay off
   onto the table and dumps high-value cards faster (issue #18).
+- Joker runs: run candidates are built in explicit left-to-right order, one per
+  window, so a joker sits in the deliberately chosen slot — the engine honours
+  a valid order (§3.9 / issue #2) — and the highest-value window wins instead
+  of arrange_run's lowest default (issue #17).
 """
 
 from __future__ import annotations
@@ -40,7 +44,7 @@ from .melds import (
     MeldKind,
     arrange_run,
     cards_points,
-    is_valid_run,
+    is_valid_run_order,
     is_valid_set,
     try_lay_off,
 )
@@ -103,19 +107,25 @@ def _run_candidates(cards: list[Card]) -> list[Meld]:
                     break
                 if start == MIN_RANK and end == RANK_ACE_HIGH:
                     continue  # no full circle
-                reals: list[Card] = []
-                missing = 0
+                # Build the candidate in left-to-right window order, jokers in
+                # the missing slots. The engine keeps a valid explicit order
+                # (§3.9 / issue #2), so each window is a distinct candidate whose
+                # jokers are worth exactly the slots they sit in — the scoring
+                # then picks the most valuable placement (issue #17).
+                seq: list[Card] = []
+                spare = list(jokers)
                 for rank in range(start, end + 1):
                     phys = RANK_ACE if rank == RANK_ACE_HIGH else rank
-                    card = by_rank.get(phys)
-                    if card is not None:
-                        reals.append(card)
+                    real = by_rank.get(phys)
+                    if real is not None:
+                        seq.append(real)
+                    elif spare:
+                        seq.append(spare.pop(0))
                     else:
-                        missing += 1
-                if reals and missing <= len(jokers):
-                    cand = [*reals, *jokers[:missing]]
-                    if is_valid_run(cand):
-                        out.append((MeldKind.RUN, cand))
+                        seq = []
+                        break
+                if seq and any(not c.is_joker for c in seq) and is_valid_run_order(seq):
+                    out.append((MeldKind.RUN, seq))
     return out
 
 
@@ -124,10 +134,11 @@ def _all_candidates(cards: list[Card]) -> list[Meld]:
 
 
 def _meld_points(kind: MeldKind, cards: list[Card]) -> int:
-    """Points the *engine* will credit for this meld. Runs are scored on the
-    arranged order (a joker's value depends on where it lands, and the engine
-    re-orders runs with `arrange_run`, preferring the lowest start)."""
-    if kind == MeldKind.RUN:
+    """Points the *engine* will credit for this meld. A run sent in a valid
+    left-to-right order is kept as-is (each joker is worth the slot it sits in,
+    §3.9 / issue #2); any other order is canonicalized with `arrange_run`, which
+    prefers the lowest start. Mirror both, or the bot mis-judges go-outs."""
+    if kind == MeldKind.RUN and not is_valid_run_order(cards):
         arranged = arrange_run(cards)
         if arranged is None:
             return 0

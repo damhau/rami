@@ -141,6 +141,48 @@ def test_bot_lays_off_a_placeable_card_instead_of_discarding():
     assert isinstance(next_bot_intent(g2, 0), Discard)
 
 
+def test_bot_does_not_take_a_discard_it_cannot_use():
+    # Issue #16 (livelock): gone out with [A♠, A♥], the A♦ on the discard forms a
+    # set — but laying it would use the whole hand, which §3.10 forbids, so the
+    # bot would take it, fail to lay it, return it, and repeat forever. It must
+    # draw from the stock instead and finish the turn normally.
+    g = two_player_state(
+        [card(S, 1, 1), card(H, 1, 2)],
+        _no_meld_filler(5),
+        round_no=1,
+        phase=Phase.AWAIT_DRAW,
+        turn=0,
+        gone_out0=True,
+    )
+    g.discard = [card(D, 1, 50)]  # A♦: completes A-A-A but only by emptying the hand
+    g.stock = [card(S, 7, 99), card(S, 8, 98)]
+    assert next_bot_intent(g, 0) == DrawStock(0)
+    # Drive the whole turn: it must pass to the opponent within a few moves.
+    for _ in range(6):
+        intent = next_bot_intent(g, 0)
+        assert intent is not None
+        g, _ = apply(g, intent)
+        if g.turn_seat != 0:
+            break
+    assert g.turn_seat == 1
+
+
+def test_bot_takes_the_discard_when_a_spare_remains():
+    # Same shape plus a spare K♠: the ace set (3 cards) now leaves a card to
+    # discard, so taking the A♦ is genuinely usable and still preferred.
+    g = two_player_state(
+        [card(S, 1, 1), card(H, 1, 2), card(S, 13, 3)],
+        _no_meld_filler(5),
+        round_no=1,
+        phase=Phase.AWAIT_DRAW,
+        turn=0,
+        gone_out0=True,
+    )
+    g.discard = [card(D, 1, 50)]
+    g.stock = [card(S, 7, 99)]
+    assert next_bot_intent(g, 0) == DrawDiscard(0)
+
+
 def test_bot_completes_a_full_turn_via_repeated_calls():
     # Drive the bot exactly as the transport does: apply moves until the turn passes.
     g = two_player_state(_no_meld_filler(9), _no_meld_filler(9), phase=Phase.AWAIT_DRAW, turn=0)

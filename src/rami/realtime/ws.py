@@ -40,6 +40,13 @@ DISCONNECT_TIMEOUT_S = 25.0
 # and the table moves on.
 FREE_CARD_TIMEOUT_S = 30.0
 AUTOPLAY_STEP_S = 0.5
+# Hard ceiling on policy moves per _run_bots/_auto_play_seat invocation. Far above
+# any legitimate sequence (a full turn is ~25 moves, several bot turns well under
+# 100) — its only job is to guarantee a buggy policy cycling without progress
+# (e.g. DrawDiscard ↔ ReturnDiscard, issue #16) can never hang the server. The
+# loops it bounds are awaited from every message handler, so an unbounded spin
+# freezes the whole table for every player.
+MAX_POLICY_MOVES = 200
 _TURN_PHASES = {Phase.AWAIT_DRAW, Phase.AWAIT_DISCARD}
 
 # One pending idle timer per table (cancelled/replaced on every state change).
@@ -100,7 +107,7 @@ async def _run_bots(session: GameSession) -> None:
     step with a short delay for readability."""
     if not session.has_bots:
         return
-    while True:
+    for _ in range(MAX_POLICY_MOVES):
         async with session.lock:
             state = session.state
             if state is None:
@@ -118,6 +125,7 @@ async def _run_bots(session: GameSession) -> None:
                 return
         await _broadcast(session, events)
         await asyncio.sleep(BOT_MOVE_DELAY_S)
+    logger.error("bot.loop_guard_tripped", extra={"code": session.code})
 
 
 # --------------------------------------------------------------------------- #
@@ -160,7 +168,7 @@ def _waiting_human_seat(session: GameSession) -> int | None:
 async def _auto_play_seat(session: GameSession, seat: int) -> None:
     """Play the bot policy on behalf of an idle/absent seat until the table no
     longer waits on it (its turn ends, or its free-card decision is made)."""
-    while True:
+    for _ in range(MAX_POLICY_MOVES):
         async with session.lock:
             state = session.state
             if state is None or not _seat_is_awaited(session, seat):
@@ -175,6 +183,7 @@ async def _auto_play_seat(session: GameSession, seat: int) -> None:
                 return
         await _broadcast(session, events)
         await asyncio.sleep(AUTOPLAY_STEP_S)
+    logger.error("autoplay.loop_guard_tripped", extra={"code": session.code, "seat": seat})
 
 
 async def _idle_timeout(session: GameSession, seat: int, nonce: int, delay: float) -> None:

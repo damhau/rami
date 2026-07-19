@@ -190,6 +190,45 @@ def test_bot_drawer_pauses_for_human_free_card_decision():
     assert wsmod._waiting_human_seat(session) is None
 
 
+def test_run_bots_loop_guard_terminates_a_stuck_policy(monkeypatch):
+    # Issue #16: _run_bots is awaited from every message handler, so a policy
+    # cycling without progress (DrawDiscard ↔ ReturnDiscard) used to hang the
+    # whole table. The MAX_POLICY_MOVES guard must break out instead.
+    import asyncio
+
+    import rami.realtime.ws as wsmod
+    from conftest import card
+    from rami.game.cards import Suit
+    from rami.game.intents import DrawDiscard, ReturnDiscard
+    from rami.game.state import GameState, PlayerState
+    from rami.game.state import Phase as P
+    from rami.tables.manager import GameSession, Seat
+
+    monkeypatch.setattr(wsmod, "BOT_MOVE_DELAY_S", 0)
+
+    calls = {"n": 0}
+
+    def stuck_policy(state, seat):  # alternates take / put-back forever
+        calls["n"] += 1
+        return ReturnDiscard(seat) if state.taken_from_discard_id is not None else DrawDiscard(seat)
+
+    monkeypatch.setattr(wsmod.ai, "next_bot_intent", stuck_policy)
+
+    seats = [Seat(seat=0, name="Bot", token="a", connected=True, is_bot=True)]
+    state = GameState(
+        players=[PlayerState(0, "Bot", hand=[card(Suit.SPADES, 5, 1)])],
+        phase=P.AWAIT_DRAW,
+        turn_seat=0,
+        discard=[card(Suit.HEARTS, 9, 2)],
+        stock=[card(Suit.CLUBS, 3, 3)],
+    )
+    session = GameSession(code="X", min_players=1, max_players=1, seats=seats, state=state)
+
+    # Must return on its own (guard) — a hang here would time out the test run.
+    asyncio.run(asyncio.wait_for(wsmod._run_bots(session), timeout=30))
+    assert calls["n"] == wsmod.MAX_POLICY_MOVES  # spun exactly to the cap, then broke
+
+
 def test_non_host_cannot_start(client):
     a = _create_table(client, "Alice")
     b = client.post(f"/api/v1/tables/{a['code']}/join", json={"name": "Bob"}).json()

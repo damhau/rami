@@ -201,6 +201,63 @@ def test_bot_takes_the_discard_when_a_spare_remains():
     assert next_bot_intent(g, 0) == DrawDiscard(0)
 
 
+def test_bot_never_discards_a_layable_card_when_an_opponent_has_one_card():
+    # Issue #18: seat 1 has gone out and holds a single card; the K♣ fits their
+    # set of Ks on the table. Value-wise the K♣ is the natural shed (highest
+    # junk), but discarding it hands the opponent the round — shed safe junk.
+    from rami.game.melds import Meld
+
+    m = Meld(0, MeldKind.SET, [card(S, 13, 1), card(H, 13, 2), card(D, 13, 3)], 1)
+    hand = [card(C, 13, 10), card(H, 9, 11), card(D, 4, 12), card(C, 2, 13), card(S, 7, 14)]
+    g = two_player_state(hand, [card(D, 5, 20)], round_no=1)  # await_discard
+    g.players[1].has_gone_out = True
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, Discard)
+    assert intent.card_id != 10  # never the layable K♣
+    assert intent.card_id == 11  # the highest-value safe card (9♥)
+
+
+def test_bot_prefers_a_safe_discard_over_a_layable_one_when_an_opponent_is_out():
+    # Issue #18: same idea at a milder threat (opponent out with 3 cards) and a
+    # run on the table — the Q♠ extends the 9-10-J♠ run, so shed the 9♥ instead.
+    from rami.game.melds import Meld
+
+    m = Meld(0, MeldKind.RUN, [card(S, 9, 1), card(S, 10, 2), card(S, 11, 3)], 1)
+    hand = [card(S, 12, 10), card(H, 9, 11), card(D, 4, 12), card(C, 2, 13)]
+    g = two_player_state(hand, [card(D, 5, 20), card(D, 8, 21), card(C, 11, 22)], round_no=1)
+    g.players[1].has_gone_out = True
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, Discard)
+    assert intent.card_id != 10  # never the layable Q♠
+    assert intent.card_id == 11  # the highest-value safe card (9♥)
+
+
+def test_bot_dumps_points_over_structure_when_an_opponent_is_about_to_win():
+    # Issue #18: seat 1 is out with one card, so the round can end any moment.
+    # Normally the lone 2♦ is the discard (9-10♠ is a near-run worth keeping),
+    # but with every held point about to count, the bot sheds the 10♠ instead.
+    hand = [card(S, 10, 10), card(S, 9, 11), card(D, 2, 12)]
+    g = two_player_state(hand, [card(D, 5, 20)], round_no=1)  # await_discard
+    g.players[1].has_gone_out = True
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, Discard)
+    assert intent.card_id == 10  # the 10♠, not the cheap lone 2♦
+
+
+def test_bot_discard_choice_is_unchanged_while_nobody_is_out():
+    # Issue #18 must not alter pre-threat behaviour: with no opponent out, the
+    # same hand keeps the near-run and sheds the lone junk card.
+    hand = [card(S, 10, 10), card(S, 9, 11), card(D, 2, 12)]
+    g = two_player_state(hand, [card(D, 5, 20)], round_no=1)  # await_discard
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, Discard)
+    assert intent.card_id == 12  # the lone 2♦
+
+
 def test_bot_completes_a_full_turn_via_repeated_calls():
     # Drive the bot exactly as the transport does: apply moves until the turn passes.
     g = two_player_state(_no_meld_filler(9), _no_meld_filler(9), phase=Phase.AWAIT_DRAW, turn=0)

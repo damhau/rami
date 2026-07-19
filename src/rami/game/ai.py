@@ -14,6 +14,8 @@ Strategy:
   and adds supplementary melds to reach the 40-point minimum.
 - Discarding: keeps cards that belong to a meld or a promising partial (pairs,
   near-runs) and sheds the least useful one, breaking ties by shedding points.
+  Once an opponent has gone out it avoids discarding cards they can lay off
+  onto the table and dumps high-value cards faster (issue #18).
 """
 
 from __future__ import annotations
@@ -318,11 +320,44 @@ def _keep_score(card: Card, hand: list[Card], locked: set[int]) -> int:
     return score
 
 
-def _choose_discard(p: PlayerState) -> Intent:
+def _feed_risk(state: GameState, seat: int, card: Card) -> int:
+    """Penalty for discarding `card` when an opponent could use it (issue #18).
+
+    Only opponents who have gone out can lay a card off, so the risk is: the
+    card fits a current table meld while such an opponent exists. It weights up
+    sharply as the most advanced opponent's hand shrinks (public info only)."""
+    out_hands = [len(o.hand) for o in state.players if o.seat != seat and o.has_gone_out]
+    if not out_hands:
+        return 0
+    if not any(try_lay_off(meld, card) is not None for meld in state.table_melds):
+        return 0
+    return 200 + 60 * max(0, 5 - min(out_hands))
+
+
+def _shed_urgency(state: GameState, seat: int) -> int:
+    """How urgently to dump hand points: 0 while no opponent has gone out,
+    rising as the most advanced opponent nears emptying their hand (the round
+    can then end at any moment, and every held point counts against us)."""
+    out_hands = [len(o.hand) for o in state.players if o.seat != seat and o.has_gone_out]
+    if not out_hands:
+        return 0
+    return 1 + max(0, 4 - min(out_hands))
+
+
+def _choose_discard(state: GameState, p: PlayerState) -> Intent:
     hand = p.hand
     locked = {c.id for _, cs in _greedy_melds(hand) for c in cs}
+    urgency = _shed_urgency(state, p.seat)
+
     # Shed the least useful card; among equally useless, shed the most points.
-    worst = min(hand, key=lambda c: (_keep_score(c, hand, locked), -card_hand_value(c)))
+    # Once an opponent has gone out, feeding them a card they can lay straight
+    # onto the table is penalised, and shedding points outweighs speculative
+    # structure that may never be completed (issue #18).
+    def priority(c: Card) -> tuple[int, int]:
+        keep = _keep_score(c, hand, locked) + _feed_risk(state, p.seat, c)
+        return (keep - urgency * card_hand_value(c), -card_hand_value(c))
+
+    worst = min(hand, key=priority)
     return Discard(p.seat, worst.id)
 
 
@@ -359,13 +394,13 @@ def next_bot_intent(state: GameState, seat: int) -> Intent | None:
                 return go
             if taken is not None:
                 return ReturnDiscard(seat)  # took the discard but can't go out with it
-            return _choose_discard(p)
+            return _choose_discard(state, p)
         # Already out.
         if taken is not None:
             move = _use_taken_card(state, p, taken)
             return move if move is not None else ReturnDiscard(seat)
         move = _find_post_go_out_move(state, p)
-        return move if move is not None else _choose_discard(p)
+        return move if move is not None else _choose_discard(state, p)
 
     return None
 

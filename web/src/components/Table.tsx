@@ -10,9 +10,13 @@ import { HelpButton } from "./Help";
 import { VersionBadge } from "./VersionBadge";
 
 export function Table() {
-  const { snapshot, connected, error, leave, dismissError, session } = useStore();
+  const { snapshot, connected, error, leave, dismissError, session, send } = useStore();
   const [showScores, setShowScores] = useState(false);
   const inGame = !!snapshot && snapshot.phase !== "lobby";
+  // Pause is a solo-game feature (issue #25): only the lone human may pause.
+  const solo =
+    !!snapshot && snapshot.players.filter((p) => !p.is_bot).length === 1;
+  const playing = inGame && snapshot.phase !== "round_over" && snapshot.phase !== "game_over";
 
   return (
     // Fixed to the *visible* viewport (see .app-shell) so the pinned hand is
@@ -47,6 +51,15 @@ export function Table() {
           </span>
           <div className="ml-auto flex items-center gap-1">
             <VersionBadge className="hidden font-mono text-[11px] text-slate-500 sm:inline" />
+            {solo && playing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => send({ type: snapshot.paused ? "resume" : "pause" })}
+              >
+                {snapshot.paused ? `▶ ${t.table.resume}` : `⏸ ${t.table.pause}`}
+              </Button>
+            )}
             {inGame && (
               <Button
                 variant="ghost"
@@ -109,6 +122,20 @@ export function Table() {
               </button>
             </div>
             <Scoreboard snap={snapshot} />
+          </div>
+        </div>
+      )}
+
+      {/* paused overlay — freezes interaction until the player resumes (#25) */}
+      {snapshot?.paused && playing && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-ink p-6 text-center shadow-2xl">
+            <div className="text-4xl">⏸</div>
+            <h2 className="mt-2 text-xl font-bold">{t.table.pausedTitle}</h2>
+            <p className="mt-2 text-sm text-slate-300">{t.table.pausedHint}</p>
+            <div className="mt-5 flex justify-center">
+              <Button onClick={() => send({ type: "resume" })}>▶ {t.table.resume}</Button>
+            </div>
           </div>
         </div>
       )}

@@ -190,6 +190,64 @@ def test_bot_drawer_pauses_for_human_free_card_decision():
     assert wsmod._waiting_human_seat(session) is None
 
 
+def test_solo_pause_resume_over_websocket(client):
+    # Issue #25: the lone human of a solo game can pause; bots hold, game
+    # intents are rejected while paused, and resume restores play.
+    r = client.post("/api/v1/tables/solo", json={"name": "Solo", "bots": 1})
+    assert r.status_code == 201
+    a = r.json()
+    with client.websocket_connect(f"/ws/table/{a['code']}?token={a['token']}") as ws:
+        _recv_until(ws, lambda m: m["type"] == "snapshot")
+        ws.send_json({"type": "pause"})
+        snap = _recv_until(ws, lambda m: m["type"] == "snapshot" and m.get("paused") is True)
+        assert snap["paused"] is True
+        # Game intents are rejected while paused.
+        ws.send_json({"type": "draw_stock"})
+        err = _recv_until(ws, lambda m: m["type"] == "error")
+        assert "paus" in err["message"]
+        ws.send_json({"type": "resume"})
+        snap = _recv_until(ws, lambda m: m["type"] == "snapshot" and m.get("paused") is False)
+        assert snap["paused"] is False
+
+
+def test_pause_is_rejected_in_multiplayer(client):
+    a = _create_table(client, "Alice")
+    b = client.post(f"/api/v1/tables/{a['code']}/join", json={"name": "Bob"}).json()
+    with (
+        client.websocket_connect(f"/ws/table/{a['code']}?token={a['token']}") as wa,
+        client.websocket_connect(f"/ws/table/{a['code']}?token={b['token']}") as wb,
+    ):
+        _recv_until(wa, lambda m: m["type"] == "snapshot")
+        _recv_until(wb, lambda m: m["type"] == "snapshot")
+        wa.send_json({"type": "start"})
+        _recv_until(wa, lambda m: m.get("phase") == "await_draw")
+        wa.send_json({"type": "pause"})
+        err = _recv_until(wa, lambda m: m["type"] == "error")
+        assert "solo" in err["message"]
+
+
+def test_paused_session_holds_bots_and_idle_timer():
+    # While paused, _run_bots must not act and _schedule_idle must not arm; a
+    # solo table never arms the idle autoplay at all (issue #25).
+    import rami.realtime.ws as wsmod
+    from rami.tables.manager import GameSession, Seat
+
+    seats = [
+        Seat(seat=0, name="Human", token="a", connected=True, is_bot=False),
+        Seat(seat=1, name="Bot", token="b", connected=True, is_bot=True),
+    ]
+    session = GameSession(code="Y", min_players=2, max_players=2, seats=seats)
+    session._rebuild_lobby_state()
+    session.start()
+    assert session.single_human
+    # Solo: no idle timer, paused or not (the game waits for the human).
+    wsmod._schedule_idle(session)
+    assert wsmod._idle_tasks.get("Y") is None
+    session.paused = True
+    wsmod._schedule_idle(session)
+    assert wsmod._idle_tasks.get("Y") is None
+
+
 def test_run_bots_loop_guard_terminates_a_stuck_policy(monkeypatch):
     # Issue #16: _run_bots is awaited from every message handler, so a policy
     # cycling without progress (DrawDiscard ↔ ReturnDiscard) used to hang the

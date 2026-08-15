@@ -42,6 +42,9 @@ class GameSession:
     state: GameState | None = None
     seed: int = 0
     decision_nonce: int = 0
+    # Solo pause (issue #25): while True, bots do not act and no idle timer is
+    # armed — the game waits, frozen, until the (single) human resumes.
+    paused: bool = False
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     # -- lobby ------------------------------------------------------------- #
@@ -66,6 +69,11 @@ class GameSession:
     @property
     def has_bots(self) -> bool:
         return any(s.is_bot for s in self.seats)
+
+    @property
+    def single_human(self) -> bool:
+        """True for a solo table: exactly one human seat (the rest are bots)."""
+        return sum(1 for s in self.seats if not s.is_bot) == 1
 
     def _rebuild_lobby_state(self) -> None:
         self.state = engine.new_game([s.name for s in self.seats], rng_seed=self.seed)

@@ -87,6 +87,7 @@ export interface Snapshot {
   table_melds: MeldView[];
   last_round_scores: Record<number, number>;
   standings: StandingView[] | null;
+  paused: boolean; // solo pause (issue #25): bots hold until resumed
 }
 
 export interface GameEvent {
@@ -120,7 +121,9 @@ export type ClientMessage =
   | { type: "return_discard" }
   | { type: "start" }
   | { type: "next_round" }
-  | { type: "ready"; ready: boolean };
+  | { type: "ready"; ready: boolean }
+  | { type: "pause" }
+  | { type: "resume" };
 
 // REST
 export interface SeatInfo {

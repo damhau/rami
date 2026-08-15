@@ -66,7 +66,7 @@ def _build_all(session: GameSession) -> dict[int, dict[str, Any]]:
     bots = [s.is_bot for s in session.seats]
     return {
         p.seat: P.build_snapshot(
-            session.code, session.state, p.seat, connected, ready, bots
+            session.code, session.state, p.seat, connected, ready, bots, session.paused
         ).model_dump()
         for p in session.state.players
     }
@@ -109,6 +109,8 @@ async def _run_bots(session: GameSession) -> None:
         return
     for _ in range(MAX_POLICY_MOVES):
         async with session.lock:
+            if session.paused:  # solo pause (issue #25): bots hold
+                return
             state = session.state
             if state is None:
                 return
@@ -203,6 +205,12 @@ def _schedule_idle(session: GameSession) -> None:
     prev = _idle_tasks.pop(session.code, None)
     if prev is not None:
         prev.cancel()
+    # Solo tables (one human) never auto-play the human's seat: nobody else is
+    # waiting, and playing turns while the player is away is exactly the
+    # complaint of issue #25 — the game simply waits for them. The same holds
+    # explicitly while paused.
+    if session.paused or session.single_human:
+        return
     seat = _waiting_human_seat(session)
     if seat is None:
         return
@@ -245,6 +253,17 @@ def _process(session: GameSession, seat: int, msg: P.ClientMessage) -> list[Even
     if isinstance(msg, P.ReadyMsg):
         session.set_ready(seat, msg.ready)
         return []
+    if isinstance(msg, P.PauseMsg | P.ResumeMsg):
+        # Pause is a solo-game feature (issue #25): with other humans at the
+        # table it would freeze the game under them.
+        if not session.single_human:
+            raise TableState("pause is only available in solo games")
+        if session.seats[seat].is_bot:  # pragma: no cover - bots have no socket
+            raise TableState("only the player can pause the game")
+        session.paused = isinstance(msg, P.PauseMsg)
+        return [Event("game_paused" if session.paused else "game_resumed", {"seat": seat})]
+    if session.paused:
+        raise TableState("the game is paused — resume to keep playing")
     intent = P.to_engine_intent(seat, msg)
     if intent is None:
         raise IllegalMove("unsupported message")

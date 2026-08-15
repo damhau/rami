@@ -85,6 +85,10 @@ export const t = {
     connected: "connecté",
     connecting: "connexion…",
     leave: "Quitter",
+    pause: "Pause",
+    resume: "Reprendre",
+    pausedTitle: "Jeu en pause",
+    pausedHint: "Les ordinateurs attendent. Reprenez quand vous voulez — la partie restera exactement dans le même état.",
     connectingTable: "Connexion à la table…",
   },
 

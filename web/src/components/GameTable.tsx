@@ -536,6 +536,19 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             <span className="sm:hidden">{t.game.addShort}</span>
             <span className="hidden sm:inline">{t.game.addMeld}</span>
           </Button>
+          {/* undo the last placement of this turn (issue #28) */}
+          {snap.can_undo && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="min-w-0 flex-1 text-xs sm:flex-none sm:text-sm"
+              onClick={() => send({ type: "undo" })}
+              title={t.game.undoPlacement}
+            >
+              <span className="sm:hidden">{t.game.undoShort}</span>
+              <span className="hidden sm:inline">↩ {t.game.undoPlacement}</span>
+            </Button>
+          )}
           <Button
             size="sm"
             variant="destructive"

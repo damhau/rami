@@ -25,6 +25,7 @@ from .intents import (
     PassFreeCard,
     RecoverJoker,
     ReturnDiscard,
+    UndoPlacement,
 )
 from .melds import (
     Meld,
@@ -38,7 +39,7 @@ from .melds import (
     validate_meld,
 )
 from .scoring import hand_score
-from .state import Event, FreeCardOffer, GameState, Phase, PlayerState
+from .state import Event, FreeCardOffer, GameState, Phase, PlayerState, UndoRecord
 
 HAND_SIZE = 13
 GO_OUT_MIN_POINTS = 40
@@ -88,6 +89,7 @@ def start_round(state: GameState) -> tuple[GameState, list[Event]]:
     s.next_meld_id = 0
     s.taken_from_discard_id = None
     s.free_card = None
+    s.turn_actions = []
     s.discard_owner_seat = None  # the opening flip comes from the deal, not a player
 
     # Deal 13 each, flip one to the discard, the rest is the stock.
@@ -133,6 +135,8 @@ def apply(state: GameState, intent: Intent) -> tuple[GameState, list[Event]]:
             _discard(s, intent, events)
         case ReturnDiscard():
             _return_discard(s, intent, events)
+        case UndoPlacement():
+            _undo_placement(s, intent, events)
         case _:  # pragma: no cover - exhaustive above
             raise IllegalMove("unknown intent")
 
@@ -345,12 +349,19 @@ def _lay_melds(s: GameState, intent: LayMelds, events: list[Event]) -> None:
         raise IllegalMove("you must keep a card to discard — you cannot lay your whole hand")
 
     # Commit: assign ids, move cards out of hand, place on the table.
+    undo = UndoRecord(
+        seat=intent.seat,
+        prev_gone_out=player.has_gone_out,
+        prev_taken_id=s.taken_from_discard_id,
+    )
     for m in built:
         m.id = s.next_meld_id
         s.next_meld_id += 1
         m.refresh()
         s.table_melds.append(m)
+        undo.new_meld_ids.append(m.id)
     player.hand = [c for c in player.hand if c.id not in laid_ids]
+    s.turn_actions.append(undo)
 
     if not player.has_gone_out:
         player.has_gone_out = True
@@ -378,6 +389,15 @@ def _matching_joker_index(meld: Meld, real: Card) -> int | None:
 def _do_recover_joker(
     s: GameState, player: PlayerState, meld: Meld, joker_idx: int, real: Card, events: list[Event]
 ) -> None:
+    s.turn_actions.append(
+        UndoRecord(
+            seat=player.seat,
+            meld_id=meld.id,
+            prev_cards=list(meld.cards),
+            prev_gone_out=player.has_gone_out,
+            prev_taken_id=s.taken_from_discard_id,
+        )
+    )
     joker = meld.cards[joker_idx]
     meld.cards[joker_idx] = real
     meld.refresh()
@@ -417,6 +437,15 @@ def _lay_off(s: GameState, intent: LayOff, events: list[Event]) -> None:
     # A turn must end on a discard (§3.10): never lay off your last card.
     if len(player.hand) <= 1:
         raise IllegalMove("you must keep a card to discard — you cannot lay off your last card")
+    s.turn_actions.append(
+        UndoRecord(
+            seat=intent.seat,
+            meld_id=meld.id,
+            prev_cards=list(meld.cards),
+            prev_gone_out=player.has_gone_out,
+            prev_taken_id=s.taken_from_discard_id,
+        )
+    )
     meld.cards = new_cards
     meld.refresh()
     _take_from_hand(player, intent.card_id)
@@ -445,6 +474,48 @@ def _recover_joker(s: GameState, intent: RecoverJoker, events: list[Event]) -> N
     _do_recover_joker(s, player, meld, joker_idx, real, events)
 
 
+def _undo_placement(s: GameState, intent: UndoPlacement, events: list[Event]) -> None:
+    """Invert the most recent placement of the current turn (issue #28).
+
+    Only placements are recorded, so draws are structurally not undoable, and
+    the stack is cleared when the turn ends, so a completed turn never is."""
+    if s.phase != Phase.AWAIT_DISCARD:
+        raise IllegalMove("there is nothing to undo now")
+    _require_turn(s, intent.seat)
+    if not s.turn_actions:
+        raise IllegalMove("there is no placement to undo")
+    rec = s.turn_actions[-1]
+    if rec.seat != intent.seat:  # pragma: no cover - stack is cleared per turn
+        raise IllegalMove("you can only undo your own placements")
+    s.turn_actions.pop()
+    player = s.player(intent.seat)
+
+    # Melds created by the action dissolve back into the hand.
+    for mid in rec.new_meld_ids:
+        meld = s.meld(mid)
+        assert meld is not None  # nothing else removes melds mid-turn
+        player.hand.extend(meld.cards)
+        s.table_melds.remove(meld)
+
+    # A modified meld returns to its previous cards: cards the action added go
+    # back to the hand, cards it displaced (a recovered joker) leave the hand.
+    if rec.meld_id is not None:
+        meld = s.meld(rec.meld_id)
+        assert meld is not None
+        prev_ids = {c.id for c in rec.prev_cards}
+        cur_ids = {c.id for c in meld.cards}
+        for c in meld.cards:
+            if c.id not in prev_ids:
+                player.hand.append(c)
+        player.hand = [c for c in player.hand if not (c.id in prev_ids and c.id not in cur_ids)]
+        meld.cards = list(rec.prev_cards)
+        meld.refresh()
+
+    player.has_gone_out = rec.prev_gone_out
+    s.taken_from_discard_id = rec.prev_taken_id
+    events.append(Event("placement_undone", {"seat": intent.seat}))
+
+
 # --------------------------------------------------------------------------- #
 # Discard & round/game end
 # --------------------------------------------------------------------------- #
@@ -466,6 +537,9 @@ def _discard(s: GameState, intent: Discard, events: list[Event]) -> None:
     # and open the card's one free-card window (issue #26).
     s.discard_owner_seat = intent.seat
     s.discard_fresh = True
+    # The turn is complete: its placements are final and can no longer be
+    # undone (issue #28).
+    s.turn_actions = []
     events.append(Event("discarded", {"seat": intent.seat, "card_id": card.id}))
 
     if not player.hand:
@@ -484,6 +558,7 @@ def _end_round(s: GameState, winner_seat: int, events: list[Event]) -> None:
         s.last_round_scores[p.seat] = p.round_score
     s.taken_from_discard_id = None
     s.free_card = None
+    s.turn_actions = []
     events.append(
         Event(
             "round_over",

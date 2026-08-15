@@ -82,6 +82,15 @@ class ReturnDiscard:
     seat: int
 
 
+@dataclass(frozen=True)
+class UndoPlacement:
+    """Undo the most recent card placement of the current turn (issue #28):
+    a laid meld comes back to hand, a lay-off is taken back, a recovered joker
+    returns to its meld. Draws and completed turns are never undoable."""
+
+    seat: int
+
+
 Intent = (
     DrawStock
     | DrawDiscard
@@ -92,4 +101,5 @@ Intent = (
     | RecoverJoker
     | Discard
     | ReturnDiscard
+    | UndoPlacement
 )

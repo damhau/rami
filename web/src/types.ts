@@ -88,6 +88,7 @@ export interface Snapshot {
   last_round_scores: Record<number, number>;
   standings: StandingView[] | null;
   paused: boolean; // solo pause (issue #25): bots hold until resumed
+  can_undo: boolean; // this seat may undo its last placement (issue #28)
 }
 
 export interface GameEvent {
@@ -123,7 +124,8 @@ export type ClientMessage =
   | { type: "next_round" }
   | { type: "ready"; ready: boolean }
   | { type: "pause" }
-  | { type: "resume" };
+  | { type: "resume" }
+  | { type: "undo" };
 
 // REST
 export interface SeatInfo {

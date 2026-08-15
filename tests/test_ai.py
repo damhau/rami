@@ -365,6 +365,76 @@ def test_bot_discard_choice_is_unchanged_while_nobody_is_out():
     assert intent.card_id == 12  # the lone 2♦
 
 
+def test_bot_lays_a_subset_when_the_maximal_meld_would_empty_the_hand():
+    # Issue #27: the hand is exactly one 4-card run and nothing is layable onto
+    # the table. Laying all four would leave no discard (§3.10), but the bot
+    # must lay a 3-card subset — the highest-value one — and discard the spare,
+    # not discard a playable card.
+    g = two_player_state(
+        [card(S, 5, 1), card(S, 6, 2), card(S, 7, 3), card(S, 8, 4)],
+        [card(H, 9, 60)],
+        round_no=1,
+        gone_out0=True,
+    )
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, LayMelds)
+    assert sorted(intent.melds[0].card_ids) == [2, 3, 4]  # 6-7-8, keeps the cheap 5♠
+    g, _ = apply(g, intent)
+    follow = next_bot_intent(g, 0)
+    assert isinstance(follow, Discard)
+    g, _ = apply(g, follow)
+    assert g.phase == Phase.ROUND_OVER
+    assert g.players[0].round_score == 0  # the bot went out cleanly
+
+
+def test_go_out_search_drops_an_extra_meld_rather_than_laying_the_whole_hand():
+    # Issue #27 (go-out variant): contract melds + greedy extras would consume
+    # the whole hand, which is illegal (§3.10). The search must drop the
+    # cheapest extra and still go out, not give up and discard.
+    # Round 1 contract: one set. Hand: K-K-K-K (40 pts) + a 3-card run.
+    hand = [
+        card(S, 13, 1),
+        card(H, 13, 2),
+        card(D, 13, 3),
+        card(C, 13, 4),
+        card(S, 2, 5),
+        card(S, 3, 6),
+        card(S, 4, 7),
+    ]
+    g = two_player_state(hand, _no_meld_filler(9), round_no=1)  # await_discard
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, LayMelds)
+    laid = {cid for spec in intent.melds for cid in spec.card_ids}
+    assert len(laid) < len(hand)  # a spare card remains for the discard
+    g, _ = apply(g, intent)
+    assert g.players[0].has_gone_out
+
+
+def test_bot_never_discards_playable_across_many_deals():
+    # Property sweep (issue #27): across full bot games, a gone-out bot with
+    # more than one card must never discard while any legal play exists.
+    from rami.game.ai import _all_candidates
+    from rami.game.melds import try_lay_off
+
+    for seed in range(25):
+        g = new_game(["A", "B"], rng_seed=seed)
+        g, _ = start_round(g)
+        for _ in range(600):
+            if g.phase in (Phase.ROUND_OVER, Phase.GAME_OVER):
+                break
+            offer = g.free_card
+            seat = offer.pending_seats[0] if offer and offer.pending_seats else g.turn_seat
+            intent = next_bot_intent(g, seat)
+            assert intent is not None
+            p = g.player(seat)
+            if isinstance(intent, Discard) and p.has_gone_out and len(p.hand) > 1:
+                assert not any(
+                    any(try_lay_off(m, c) is not None for m in g.table_melds) for c in p.hand
+                ), (seed, [c.label for c in p.hand])
+                assert not any(len(cs) < len(p.hand) for _, cs in _all_candidates(p.hand)), seed
+            g, _ = apply(g, intent)
+
+
 def test_bot_completes_a_full_turn_via_repeated_calls():
     # Drive the bot exactly as the transport does: apply moves until the turn passes.
     g = two_player_state(_no_meld_filler(9), _no_meld_filler(9), phase=Phase.AWAIT_DRAW, turn=0)

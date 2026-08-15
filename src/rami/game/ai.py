@@ -50,7 +50,11 @@ from .intents import (
     LayOff,
     MeldSpec,
     PassFreeCard,
+    RecoverJoker,
     ReturnDiscard,
+)
+from .melds import (
+    Meld as TableMeld,
 )
 from .melds import (
     MeldKind,
@@ -59,6 +63,7 @@ from .melds import (
     is_valid_run_order,
     is_valid_set,
     joker_representations,
+    repr_matches_card,
     run_bounds,
     try_lay_off,
 )
@@ -312,14 +317,66 @@ def _use_taken_card(state: GameState, p: PlayerState, taken_id: int) -> Intent |
     return None
 
 
+def _find_recover_move(state: GameState, p: PlayerState) -> Intent | None:
+    """Recover a table joker with a card in hand — but only when the freed
+    joker can immediately be redeployed (issue #20).
+
+    Recovering costs nothing (the real card takes the joker's slot) and then
+    laying the joker elsewhere sheds a card while upgrading its placement — a
+    strict improvement over a plain lay-off of the same real card. Without a
+    redeploy slot the joker would just sit in hand as a 25-point liability, so
+    the bot leaves it on the table."""
+    if len(p.hand) <= 1:
+        return None  # the redeploy lay-off must leave a card to discard (§3.10)
+    for real in p.hand:
+        if real.is_joker:
+            continue
+        for meld in state.table_melds:
+            joker_card = next(
+                (
+                    c
+                    for c in meld.cards
+                    if c.is_joker
+                    and (rep := meld.represents.get(c.id)) is not None
+                    and repr_matches_card(rep, real)
+                ),
+                None,
+            )
+            if joker_card is None:
+                continue
+            # Simulate the post-recovery table: the real card takes the slot.
+            swapped = TableMeld(
+                id=meld.id,
+                kind=meld.kind,
+                cards=[real if c.id == joker_card.id else c for c in meld.cards],
+                owner_seat=meld.owner_seat,
+            )
+            sim_table = [swapped if m.id == meld.id else m for m in state.table_melds]
+            can_redeploy = any(
+                try_lay_off(m, joker_card) is not None for m in sim_table
+            ) or any(
+                joker_card.id in {c.id for c in cs} and len(cs) < len(p.hand)
+                for _, cs in _all_candidates(
+                    [*(c for c in p.hand if c.id != real.id), joker_card]
+                )
+            )
+            if can_redeploy:
+                return RecoverJoker(p.seat, meld.id, real.id)
+    return None
+
+
 def _find_post_go_out_move(state: GameState, p: PlayerState) -> Intent | None:
     """Shed one more card onto the table, if possible without emptying the hand.
 
-    Prefer laying off the highest-penalty card first (never discard a card that
-    has a legal table play — issue #5, §3.9), then a fresh supplementary meld.
-    Always leaves at least one card so the turn can end on a discard (§3.10)."""
+    Prefer recovering a redeployable joker (issue #20), then laying off the
+    highest-penalty card first (never discard a card that has a legal table
+    play — issue #5, §3.9), then a fresh supplementary meld. Always leaves at
+    least one card so the turn can end on a discard (§3.10)."""
     if len(p.hand) <= 1:
         return None  # must keep the last card to discard
+    recover = _find_recover_move(state, p)
+    if recover is not None:
+        return recover
     # Exactly one card is kept back for the mandatory discard, so lay off the
     # most expensive placeable card first — a placeable joker must never end up
     # as the forced final discard (issue #14: that hands 25 pts to the pile) —

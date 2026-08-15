@@ -96,6 +96,14 @@ class ReadyMsg(_Base):
     ready: bool
 
 
+class PauseMsg(_Base):
+    type: Literal["pause"]
+
+
+class ResumeMsg(_Base):
+    type: Literal["resume"]
+
+
 ClientMessage = Annotated[
     DrawStockMsg
     | DrawDiscardMsg
@@ -108,7 +116,9 @@ ClientMessage = Annotated[
     | ReturnDiscardMsg
     | StartMsg
     | NextRoundMsg
-    | ReadyMsg,
+    | ReadyMsg
+    | PauseMsg
+    | ResumeMsg,
     Field(discriminator="type"),
 ]
 
@@ -224,6 +234,7 @@ class Snapshot(BaseModel):
     table_melds: list[MeldView]
     last_round_scores: dict[int, int]
     standings: list[StandingView] | None
+    paused: bool = False  # solo pause (issue #25): bots hold until resumed
 
 
 class EventView(BaseModel):
@@ -296,6 +307,7 @@ def build_snapshot(
     connected: list[bool],
     ready: list[bool],
     bots: list[bool] | None = None,
+    paused: bool = False,
 ) -> Snapshot:
     bots = bots or []
     you = state.player(seat)
@@ -344,6 +356,7 @@ def build_snapshot(
         table_melds=[meld_view(m) for m in state.table_melds],
         last_round_scores=dict(state.last_round_scores),
         standings=standings,
+        paused=paused,
     )
 
 

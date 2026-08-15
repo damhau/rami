@@ -355,6 +355,39 @@ def test_bot_dumps_points_over_structure_when_an_opponent_is_about_to_win():
     assert intent.card_id == 10  # the 10♠, not the cheap lone 2♦
 
 
+def test_discard_follows_the_contract_kind():
+    # Issue #19: the same hand sheds differently depending on the round's
+    # contract. Pair of 7s + a 9-10 run fragment:
+    def probe(round_no: int):
+        hand = [card(S, 7, 1), card(H, 7, 2), card(D, 9, 3), card(D, 10, 4)]
+        g = two_player_state(hand, [card(C, 2, 60)], round_no=round_no)
+        intent = next_bot_intent(g, 0)
+        assert isinstance(intent, Discard)
+        return intent.card_id
+
+    # Round 1 wants a set: keep the pair, shed the run fragment (highest first).
+    assert probe(1) == 4  # the 10♦
+    # Round 2 wants a run: keep the run fragment, shed from the pair.
+    assert probe(2) in (1, 2)  # one of the 7s
+
+
+def test_discard_weights_are_neutral_once_the_contract_is_covered():
+    # Round 1 needs one set; the hand already holds K-K-K complete. The
+    # remaining fragments score neutrally, so the isolated junk card goes.
+    hand = [
+        card(S, 13, 1),
+        card(H, 13, 2),
+        card(D, 13, 3),  # complete set (covers the contract)
+        card(D, 9, 4),
+        card(D, 10, 5),  # run fragment
+        card(C, 2, 6),  # junk
+    ]
+    g = two_player_state(hand, [card(C, 3, 60)], round_no=1)
+    intent = next_bot_intent(g, 0)
+    assert isinstance(intent, Discard)
+    assert intent.card_id == 6  # junk, not the run fragment
+
+
 def test_bot_discard_choice_is_unchanged_while_nobody_is_out():
     # Issue #18 must not alter pre-threat behaviour: with no opponent out, the
     # same hand keeps the near-run and sheds the lone junk card.

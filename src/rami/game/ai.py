@@ -393,26 +393,68 @@ def _useful_free_card(state: GameState, p: PlayerState, card: Card) -> bool:
 # --------------------------------------------------------------------------- #
 
 
-def _keep_score(card: Card, hand: list[Card], locked: set[int]) -> int:
+def _keep_score(
+    card: Card, hand: list[Card], locked: set[int], set_w: float = 1.0, run_w: float = 1.0
+) -> int:
+    """Usefulness of keeping `card`. Partial-structure terms are weighted by
+    what the round's contract still needs (issue #19): a pair is worth less in
+    a runs-only round, a near-run less in a sets-only round."""
     if card.is_joker:
         return 10_000
-    score = 0
+    score = 0.0
     if card.id in locked:
         score += 1_000  # already part of a complete meld we're holding
     assert card.rank is not None
     same_rank = sum(1 for o in hand if o.id != card.id and not o.is_joker and o.rank == card.rank)
     if same_rank:
-        score += 40 + 15 * same_rank  # a pair/triple toward a set
+        score += (40 + 15 * same_rank) * set_w  # a pair/triple toward a set
     for o in hand:
         if o.id == card.id or o.is_joker or o.suit != card.suit or o.rank == card.rank:
             continue
         assert o.rank is not None
         gap = abs(o.rank - card.rank)
         if gap == 1:
-            score += 25  # neighbour toward a run
+            score += 25 * run_w  # neighbour toward a run
         elif gap == 2:
-            score += 12  # one-gap toward a run
-    return score
+            score += 12 * run_w  # one-gap toward a run
+    return int(score)
+
+
+def _contract_weights(
+    state: GameState, p: PlayerState, melds_held: list[Meld]
+) -> tuple[float, float]:
+    """(set_w, run_w) for partial-structure scoring (issue #19).
+
+    Before going out, fragments toward a meld kind the contract still needs
+    (given the complete melds already held) are worth more, fragments toward a
+    kind it does not need are worth less. Once out — or once the contract is
+    fully covered — any meld sheds cards equally well, so weights are neutral."""
+    if p.has_gone_out:
+        return 1.0, 1.0
+    need = {MeldKind.SET: 0, MeldKind.RUN: 0}
+    reqs = sorted(
+        contract_for(state.round_no).requirements, key=lambda r: r.min_len, reverse=True
+    )
+    held = sorted(melds_held, key=lambda kc: len(kc[1]), reverse=True)
+    used: set[int] = set()
+    for req in reqs:
+        match = next(
+            (
+                i
+                for i, (kind, cs) in enumerate(held)
+                if i not in used and kind == req.kind and len(cs) >= req.min_len
+            ),
+            None,
+        )
+        if match is None:
+            need[req.kind] += 1
+        else:
+            used.add(match)
+    if need[MeldKind.SET] == 0 and need[MeldKind.RUN] == 0:
+        return 1.0, 1.0  # contract covered — the go-out is imminent anyway
+    set_w = 1.5 if need[MeldKind.SET] else 0.5
+    run_w = 1.5 if need[MeldKind.RUN] else 0.5
+    return set_w, run_w
 
 
 def _feed_risk(state: GameState, seat: int, card: Card) -> int:
@@ -441,15 +483,18 @@ def _shed_urgency(state: GameState, seat: int) -> int:
 
 def _choose_discard(state: GameState, p: PlayerState) -> Intent:
     hand = p.hand
-    locked = {c.id for _, cs in _greedy_melds(hand) for c in cs}
+    melds_held = _greedy_melds(hand)
+    locked = {c.id for _, cs in melds_held for c in cs}
     urgency = _shed_urgency(state, p.seat)
+    set_w, run_w = _contract_weights(state, p, melds_held)
 
     # Shed the least useful card; among equally useless, shed the most points.
+    # Fragments are weighted by what the contract still needs (issue #19).
     # Once an opponent has gone out, feeding them a card they can lay straight
     # onto the table is penalised, and shedding points outweighs speculative
     # structure that may never be completed (issue #18).
     def priority(c: Card) -> tuple[int, int]:
-        keep = _keep_score(c, hand, locked) + _feed_risk(state, p.seat, c)
+        keep = _keep_score(c, hand, locked, set_w, run_w) + _feed_risk(state, p.seat, c)
         return (keep - urgency * card_hand_value(c), -card_hand_value(c))
 
     worst = min(hand, key=priority)

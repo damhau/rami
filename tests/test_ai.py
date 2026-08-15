@@ -468,6 +468,37 @@ def test_bot_never_discards_playable_across_many_deals():
             g, _ = apply(g, intent)
 
 
+def test_bot_recovers_a_buried_joker_and_redeploys_it():
+    # Issue #20: the 7♣ both extends the club run (first on the table) and
+    # matches the joker in the set of 7s. A plain lay-off would leave the joker
+    # buried; the bot must instead recover it and redeploy it onto the table.
+    from rami.game.intents import RecoverJoker
+    from rami.game.melds import Meld
+
+    run_c = Meld(0, MeldKind.RUN, [card(C, 4, 1), card(C, 5, 2), card(C, 6, 3)], 1)
+    set7 = Meld(1, MeldKind.SET, [card(S, 7, 4), card(H, 7, 5), card(D, 7, 6), joker(7)], 1)
+    g = two_player_state(
+        [card(C, 7, 10), card(S, 13, 11)], [card(H, 9, 60)], round_no=1, gone_out0=True
+    )
+    g.table_melds = [run_c, set7]
+    g.next_meld_id = 2
+    intent = next_bot_intent(g, 0)
+    assert intent == RecoverJoker(0, 1, 10)  # 7♣ frees the joker from the set
+    g, _ = apply(g, intent)
+    # The freed joker is redeployed onto the table before the turn ends.
+    moves = []
+    for _ in range(6):
+        mv = next_bot_intent(g, 0)
+        assert mv is not None
+        moves.append(mv)
+        g, _ = apply(g, mv)
+        if g.phase != Phase.AWAIT_DISCARD:
+            break
+    assert not any(c.is_joker for c in g.players[0].hand)  # never stranded in hand
+    assert any(c.is_joker for m in g.table_melds for c in m.cards)  # back on the table
+    assert isinstance(moves[-1], Discard)  # the turn still ended on a discard
+
+
 def test_bot_completes_a_full_turn_via_repeated_calls():
     # Drive the bot exactly as the transport does: apply moves until the turn passes.
     g = two_player_state(_no_meld_filler(9), _no_meld_filler(9), phase=Phase.AWAIT_DRAW, turn=0)

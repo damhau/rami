@@ -95,6 +95,7 @@ def start_round(state: GameState) -> tuple[GameState, list[Event]]:
         for p in s.players:
             p.hand.append(deck.pop())
     s.discard = [deck.pop()]
+    s.discard_fresh = True  # the opening flip opens its own free-card window (§3.7)
     s.stock = deck
 
     s.turn_seat = (s.dealer_seat + 1) % n
@@ -199,7 +200,12 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
     #  - 3+ players: every stock draw offers the refused card to the following seats.
     #  - 2 players: only the *opening* discard is offered — if the starter refuses it,
     #    the opponent may take it for free (no obligation to go out).
-    if s.discard and (s.num_players >= 3 or opening):
+    # Only a card still inside its one free-card window may be offered (R2 /
+    # issue #26): a resurfaced or previously refused top is dead. This stock
+    # draw is the refusal that spends the window, offer or not.
+    fresh = s.discard_fresh
+    s.discard_fresh = False
+    if s.discard and fresh and (s.num_players >= 3 or opening):
         # A player's own discard is never offered back to them (issue #23): the
         # seat that discarded the visible card is skipped in the chain.
         pending = [
@@ -220,7 +226,10 @@ def _draw_discard(s: GameState, intent: DrawDiscard, events: list[Event]) -> Non
         raise IllegalMove("the discard pile is empty")
     s.opening_turn = False
     card = s.discard.pop()
-    s.discard_owner_seat = None  # the top changed; the new top's owner is unknown
+    # The top changed: the new (resurfaced) top is an old card — unknown owner,
+    # and its free-card window is long spent (issue #26).
+    s.discard_owner_seat = None
+    s.discard_fresh = False
     s.player(intent.seat).hand.append(card)
     # Taking the discard obliges laying it this turn (a go-out if not yet out).
     s.taken_from_discard_id = card.id
@@ -240,8 +249,11 @@ def _return_discard(s: GameState, intent: ReturnDiscard, events: list[Event]) ->
     card = _take_from_hand(player, s.taken_from_discard_id)
     s.discard.append(card)
     # The restored top was discarded by an earlier (unknown) seat, not by the
-    # returner — leave the owner unset rather than mis-attributing it.
+    # returner — leave the owner unset rather than mis-attributing it. Its
+    # free-card window stays spent: a picked-up-and-returned card is never
+    # offered again (issue #26).
     s.discard_owner_seat = None
+    s.discard_fresh = False
     s.taken_from_discard_id = None
     s.phase = Phase.AWAIT_DRAW
     events.append(Event("returned_discard", {"seat": intent.seat, "card_id": card.id}))
@@ -263,7 +275,9 @@ def _free_card_decision(s: GameState, seat: int, claim: bool, events: list[Event
         if not s.discard:
             raise IllegalMove("the free card is gone")
         card = s.discard.pop()
-        s.discard_owner_seat = None  # the top changed; the new top's owner is unknown
+        # The resurfaced top is an old card: unknown owner, window spent (#26).
+        s.discard_owner_seat = None
+        s.discard_fresh = False
         s.player(seat).hand.append(card)
         events.append(Event("free_card_claimed", {"seat": seat, "card_id": card.id}))
         s.free_card = None  # a single card — claiming it ends the offer
@@ -448,8 +462,10 @@ def _discard(s: GameState, intent: Discard, events: list[Event]) -> None:
     card = _take_from_hand(player, intent.card_id)
     s.discard.append(card)
     # Remember who discarded the new top so a later free-card chain can skip
-    # them — a player is never offered their own discard back (issue #23).
+    # them — a player is never offered their own discard back (issue #23) —
+    # and open the card's one free-card window (issue #26).
     s.discard_owner_seat = intent.seat
+    s.discard_fresh = True
     events.append(Event("discarded", {"seat": intent.seat, "card_id": card.id}))
 
     if not player.hand:

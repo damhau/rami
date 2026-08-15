@@ -125,6 +125,7 @@ def test_two_player_opening_free_card_offered_and_claimed():
     g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
+    g.discard_fresh = True  # the opening flip is inside its free-card window
     g.opening_turn = True
     g, ev = apply(g, DrawStock(0))
     assert g.free_card is not None
@@ -142,6 +143,7 @@ def test_two_player_opening_free_card_declined():
     g = two_player_state(_filler(13), _filler(13), phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
+    g.discard_fresh = True  # the opening flip is inside its free-card window
     g.opening_turn = True
     g, _ = apply(g, DrawStock(0))
     g, _ = apply(g, PassFreeCard(1))
@@ -153,6 +155,7 @@ def test_free_card_offered_without_blocking_drawer():
     g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
+    g.discard_fresh = True  # a just-discarded card, still in its window
     g, _ = apply(g, DrawStock(0))
     # The drawer proceeds to discard; the offer is open to the following seats.
     assert g.phase == Phase.AWAIT_DISCARD
@@ -164,6 +167,7 @@ def test_free_card_claimed_out_of_turn():
     g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
+    g.discard_fresh = True  # a just-discarded card, still in its window
     g, _ = apply(g, DrawStock(0))
     g, _ = apply(g, ClaimFreeCard(1))  # seat 1 claims although it is seat 0's turn
     assert any(c.id == 2 for c in g.players[1].hand)
@@ -176,6 +180,7 @@ def test_free_card_passes_advance_then_expire():
     g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
+    g.discard_fresh = True  # a just-discarded card, still in its window
     g, _ = apply(g, DrawStock(0))
     g, _ = apply(g, PassFreeCard(1))
     assert g.free_card is not None
@@ -222,6 +227,7 @@ def test_free_card_offer_closes_when_drawer_discards():
     g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
+    g.discard_fresh = True  # a just-discarded card, still in its window
     g, _ = apply(g, DrawStock(0))
     assert g.free_card is not None
     g, _ = apply(g, Discard(0, 900))  # drawer ends the turn
@@ -234,9 +240,37 @@ def test_wrong_seat_cannot_decide_free_card():
     g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]
     g.discard = [card(H, 9, 2)]
+    g.discard_fresh = True  # a just-discarded card, still in its window
     g, _ = apply(g, DrawStock(0))
+    assert g.free_card is not None  # the offer really opened
     with pytest.raises(IllegalMove):
         apply(g, ClaimFreeCard(2))  # seat 2 must wait behind seat 1
+
+
+def test_declined_free_card_is_never_offered_again():
+    # Issue #26: once a card's free-card window is spent, it is dead — even if
+    # it resurfaces. Seat 0 discards X; seat 1 picks it up, returns it, and then
+    # draws from stock: no new offer may open for X.
+    hands = [[card(S, 5, 1), card(H, 9, 2)], [card(D, 4, 10), card(D, 5, 11)], [card(C, 7, 20)]]
+    g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
+    g.stock = [card(S, 3, 90), card(S, 2, 91)]
+    g.discard = [card(D, 11, 50)]
+    g, _ = apply(g, Discard(0, 2))  # X = 9H, fresh
+    g, _ = apply(g, DrawDiscard(1))  # pickup spends X's window
+    g, _ = apply(g, ReturnDiscard(1))
+    assert not g.discard_fresh
+    g, _ = apply(g, DrawStock(1))  # refusing the returned X opens nothing
+    assert g.free_card is None
+
+
+def test_resurfaced_old_top_is_not_offered_on_stock_draw():
+    # A card that resurfaces from under the pile (its window long spent) must
+    # not trigger an offer when the next player draws from stock.
+    g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
+    g.stock = [card(S, 2, 1)]
+    g.discard = [card(H, 9, 2)]  # an old, resurfaced top: discard_fresh stays False
+    g, _ = apply(g, DrawStock(0))
+    assert g.free_card is None
 
 
 # --------------------------------------------------------------------------- #

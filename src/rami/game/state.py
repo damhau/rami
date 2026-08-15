@@ -63,6 +63,10 @@ class GameState:
     # True only during the round's opening turn (before the starter's first draw);
     # gates the 2-player opening free card (§3.7).
     opening_turn: bool = False
+    # Seat that discarded the current top of the discard pile, or None when
+    # unknown (dealt flip, or the top changed by a pickup/claim/return). Used to
+    # keep a player's own discard out of the free-card chain (issue #23).
+    discard_owner_seat: int | None = None
 
     rng_seed: int = 0
     shuffle_count: int = 0

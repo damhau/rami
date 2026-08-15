@@ -1,3 +1,19 @@
+## v0.11.0 (2026-08-15)
+
+### Feat
+
+- **ai**: recover and redeploy buried jokers (#20)
+- **ai**: weight kept and discarded cards by the round's contract (#19)
+- undo the last card placement of the current turn (#28)
+- pause and resume solo games (#25)
+
+### Fix
+
+- **web**: action buttons can never be pushed off-screen by dock content (#24)
+- **ai**: lay a subset meld instead of discarding when the maximal meld would empty the hand (#27)
+- a discarded card gets exactly one free-card window (#26)
+- never offer a player their own discard as a free card (#23)
+
 ## v0.10.0 (2026-07-19)
 
 ### Feat

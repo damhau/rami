@@ -378,11 +378,16 @@ export function GameTable({ snap }: { snap: Snapshot }) {
       </div>
       </div>
 
-      {/* ---------------- player dock (pinned; hand + actions always reachable) ---------------- */}
+      {/* ---------------- player dock (pinned; hand + actions always reachable) ----------------
+          The dock may shrink (min-h-0, capped at 70% of the game area) and
+          everything above the action row scrolls internally, so no combination
+          of banners, staged tray rows, and a large hand can ever push the
+          action buttons out of the viewport (issue #24). */}
       <div
-        className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4"
+        className="flex min-h-0 max-h-[70%] flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-3 md:p-4"
         style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
       >
+        <div className="min-h-0 flex-1 overflow-y-auto">
         {/* free-card prompt — an inline banner in the dock (not a felt overlay),
             so it never hides the table melds while you decide (issue #13). */}
         {freeForMe && (
@@ -478,11 +483,11 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             overflow-y to clip too, so the scroll box needs top padding. */}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={hand.map((c) => c.id)} strategy={rectSortingStrategy}>
-            {/* Phones: wrap to as many rows as needed, but cap the strip's
-                height and scroll it internally so a large hand can never push
-                the action buttons below the fold (issue #6). Desktop: one
-                fanned row that scrolls horizontally. */}
-            <div className="mt-3 flex max-h-[38dvh] flex-wrap items-end justify-center gap-x-1 gap-y-3 overflow-y-auto pt-6 pb-2 sm:max-h-none sm:flex-nowrap sm:justify-start sm:gap-0 sm:overflow-x-auto sm:overflow-y-visible">
+            {/* Phones: wrap to as many rows as needed — the dock's single
+                scroll region above the pinned action row absorbs any overflow
+                (issues #6, #24). Desktop: one fanned row that scrolls
+                horizontally. */}
+            <div className="mt-3 flex flex-wrap items-end justify-center gap-x-1 gap-y-3 pt-6 pb-2 sm:flex-nowrap sm:justify-start sm:gap-0 sm:overflow-x-auto">
               {hand.map((c, i) => (
                 <SortableCard
                   key={c.id}
@@ -495,9 +500,11 @@ export function GameTable({ snap }: { snap: Snapshot }) {
             </div>
           </SortableContext>
         </DndContext>
+        </div>
 
-        {/* actions — one compact row on phones, wraps to full labels on sm+ */}
-        <div className="mt-3 flex items-center gap-1.5 sm:flex-wrap sm:gap-2">
+        {/* actions — pinned below the scroll region so they are always
+            visible and tappable (issue #24); compact on phones, full on sm+ */}
+        <div className="mt-3 flex shrink-0 items-center gap-1.5 sm:flex-wrap sm:gap-2">
           <Button
             size="sm"
             className="min-w-0 flex-1 text-xs sm:flex-none sm:text-sm"

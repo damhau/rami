@@ -193,12 +193,26 @@ def _cover_contract(
     def consider(chosen: list[Meld], used: set[int]) -> None:
         nonlocal best, best_total
         extras = _greedy_melds([c for c in cards if c.id not in used])
+        # A turn always ends on a discard (§3.10): the go-out must leave at
+        # least one card in hand. When the extras would consume the whole hand,
+        # drop the cheapest droppable extra instead of abandoning the go-out
+        # entirely (issue #27) — the taken-discard card must stay laid.
+        if len(used) + sum(len(cs) for _, cs in extras) >= len(cards):
+            droppable = sorted(
+                (
+                    m
+                    for m in extras
+                    if require_id is None or require_id not in {c.id for c in m[1]}
+                ),
+                key=lambda kc: _meld_points(kc[0], kc[1]),
+            )
+            if not droppable:
+                return
+            extras = [m for m in extras if m is not droppable[0]]
         melds = chosen + extras
         all_ids = used | {c.id for _, cs in extras for c in cs}
         if require_id is not None and require_id not in all_ids:
             return
-        # A turn always ends on a discard (§3.10): the go-out must leave at least
-        # one card in hand to discard — never lay the whole hand.
         if len(all_ids) >= len(cards):
             return
         total = sum(_meld_points(k, cs) for k, cs in melds)
@@ -314,10 +328,21 @@ def _find_post_go_out_move(state: GameState, p: PlayerState) -> Intent | None:
         lay = _best_lay_off(state, p.seat, card)
         if lay is not None:
             return lay
-    # Otherwise lay a fresh meld if one is available (and it leaves a spare).
-    for kind, cards in _greedy_melds(p.hand):
-        if len(cards) < len(p.hand):
-            return LayMelds(p.seat, [MeldSpec(kind=kind, card_ids=[c.id for c in cards])])
+    # Otherwise lay the best fresh meld that leaves a spare. Consider *every*
+    # candidate, not just the greedy-maximal melds: when the whole hand is one
+    # 4+-card meld, the maximal version would empty the hand (illegal, §3.10)
+    # but a shorter subset is still playable — discarding instead of laying it
+    # was issue #27.
+    best: Meld | None = None
+    best_pts = -1
+    for kind, cs in _all_candidates(p.hand):
+        if len(cs) < len(p.hand):
+            pts = _meld_points(kind, cs)
+            if pts > best_pts:
+                best, best_pts = (kind, cs), pts
+    if best is not None:
+        kind, cs = best
+        return LayMelds(p.seat, [MeldSpec(kind=kind, card_ids=[c.id for c in cs])])
     return None
 
 

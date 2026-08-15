@@ -22,6 +22,7 @@ from rami.game.intents import (
     PassFreeCard,
     RecoverJoker,
     ReturnDiscard,
+    UndoPlacement,
 )
 from rami.game.melds import Meld, MeldKind, ReprCard, meld_points
 from rami.game.state import Event, GameState, Phase
@@ -104,6 +105,10 @@ class ResumeMsg(_Base):
     type: Literal["resume"]
 
 
+class UndoMsg(_Base):
+    type: Literal["undo"]
+
+
 ClientMessage = Annotated[
     DrawStockMsg
     | DrawDiscardMsg
@@ -118,7 +123,8 @@ ClientMessage = Annotated[
     | NextRoundMsg
     | ReadyMsg
     | PauseMsg
-    | ResumeMsg,
+    | ResumeMsg
+    | UndoMsg,
     Field(discriminator="type"),
 ]
 
@@ -147,6 +153,8 @@ def to_engine_intent(seat: int, msg: ClientMessage) -> Intent | None:
             return Discard(seat, msg.card_id)
         case ReturnDiscardMsg():
             return ReturnDiscard(seat)
+        case UndoMsg():
+            return UndoPlacement(seat)
         case _:
             return None
 
@@ -235,6 +243,7 @@ class Snapshot(BaseModel):
     last_round_scores: dict[int, int]
     standings: list[StandingView] | None
     paused: bool = False  # solo pause (issue #25): bots hold until resumed
+    can_undo: bool = False  # this seat may undo its last placement (issue #28)
 
 
 class EventView(BaseModel):
@@ -357,6 +366,11 @@ def build_snapshot(
         last_round_scores=dict(state.last_round_scores),
         standings=standings,
         paused=paused,
+        can_undo=(
+            state.phase == Phase.AWAIT_DISCARD
+            and state.turn_seat == seat
+            and bool(state.turn_actions)
+        ),
     )
 
 

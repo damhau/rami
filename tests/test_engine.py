@@ -19,6 +19,7 @@ from rami.game.intents import (
     PassFreeCard,
     RecoverJoker,
     ReturnDiscard,
+    UndoPlacement,
 )
 from rami.game.melds import Meld, MeldKind
 from rami.game.state import Phase
@@ -560,3 +561,112 @@ def test_game_over_after_round_11():
 
 def test_go_out_const_is_40():
     assert engine.GO_OUT_MIN_POINTS == 40
+
+
+# --------------------------------------------------------------------------- #
+# Undo the last placement (issue #28)
+# --------------------------------------------------------------------------- #
+
+
+def test_undo_lay_off_returns_the_card_and_restores_the_meld():
+    m = Meld(0, SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 0)
+    g = two_player_state([card(C, 9, 5), card(S, 2, 6)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    g, _ = apply(g, LayOff(0, 0, 5))
+    assert len(g.table_melds[0].cards) == 4
+    g, ev = apply(g, UndoPlacement(0))
+    assert any(e.type == "placement_undone" for e in ev)
+    assert [c.id for c in g.table_melds[0].cards] == [1, 2, 3]  # meld restored
+    assert any(c.id == 5 for c in g.players[0].hand)  # card back in hand
+    assert not g.turn_actions  # nothing left to undo
+
+
+def test_undo_go_out_restores_hand_and_status():
+    hand = [card(S, 13, 1), card(H, 13, 2), card(D, 13, 3), card(C, 13, 4), card(S, 2, 5)]
+    g = two_player_state(hand, _filler(13), round_no=1)
+    g, _ = apply(g, LayMelds(0, [MeldSpec(SET, [1, 2, 3, 4])]))
+    assert g.players[0].has_gone_out
+    g, _ = apply(g, UndoPlacement(0))
+    assert not g.players[0].has_gone_out  # go-out reversed
+    assert not g.table_melds  # the meld came off the table
+    assert sorted(c.id for c in g.players[0].hand) == [1, 2, 3, 4, 5]
+    # The contract can be laid again afterwards.
+    g, _ = apply(g, LayMelds(0, [MeldSpec(SET, [1, 2, 3, 4])]))
+    assert g.players[0].has_gone_out
+
+
+def test_undo_restores_the_discard_pickup_obligation():
+    # Take the discard, go out using it, undo: the obligation must come back.
+    hand = [card(H, 13, 1), card(D, 13, 2), card(C, 13, 3), *_filler(9)]
+    g = two_player_state(hand, _filler(13), round_no=1, phase=Phase.AWAIT_DRAW)
+    g.discard = [card(S, 13, 50)]
+    g.stock = [card(S, 2, 99)]
+    g, _ = apply(g, DrawDiscard(0))
+    g, _ = apply(g, LayMelds(0, [MeldSpec(SET, [50, 1, 2, 3])]))
+    assert g.taken_from_discard_id is None
+    g, _ = apply(g, UndoPlacement(0))
+    assert g.taken_from_discard_id == 50  # must still lay (or return) the King
+    with pytest.raises(IllegalMove):
+        apply(g, Discard(0, 50))  # cannot just discard it
+
+
+def test_undo_joker_recovery_puts_the_joker_back():
+    m = Meld(0, SET, [card(S, 7, 1), card(H, 7, 2), card(D, 7, 3), joker(4)], 0)
+    g = two_player_state([card(C, 7, 5), card(S, 2, 6)], round_no=1, gone_out0=True)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    g, _ = apply(g, RecoverJoker(0, 0, 5))
+    assert any(c.id == 4 and c.is_joker for c in g.players[0].hand)
+    g, _ = apply(g, UndoPlacement(0))
+    assert not any(c.is_joker for c in g.players[0].hand)  # joker back in the meld
+    assert any(c.id == 4 for c in g.table_melds[0].cards)
+    assert any(c.id == 5 for c in g.players[0].hand)  # the real 7C came back
+    assert g.table_melds[0].represents[4].suit == C  # representation recomputed
+
+
+def test_undo_is_rejected_when_there_is_nothing_to_undo():
+    g = two_player_state(_filler(13), _filler(13), round_no=1)
+    with pytest.raises(IllegalMove):
+        apply(g, UndoPlacement(0))
+
+
+def test_completed_turn_cannot_be_undone():
+    # The stack clears on the discard that ends the turn: the next player (or
+    # the same player next turn) can never unwind it.
+    m = Meld(0, SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 0)
+    g = two_player_state(
+        [card(C, 9, 5), card(S, 2, 6)], [card(D, 4, 7)], round_no=1, gone_out0=True
+    )
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    g, _ = apply(g, LayOff(0, 0, 5))
+    g, _ = apply(g, Discard(0, 6))  # turn over
+    assert not g.turn_actions
+    with pytest.raises(IllegalMove):
+        apply(g, UndoPlacement(1))  # seat 1 cannot undo seat 0's turn
+
+
+def test_sequential_undos_unwind_in_reverse_order():
+    # Go out, then lay off; two undos restore the original position exactly.
+    m = Meld(0, SET, [card(S, 9, 1), card(H, 9, 2), card(D, 9, 3)], 1)
+    hand = [
+        card(S, 13, 11),
+        card(H, 13, 12),
+        card(D, 13, 13),
+        card(C, 13, 14),
+        card(C, 9, 15),
+        card(S, 2, 16),
+    ]
+    g = two_player_state(hand, _filler(13), round_no=1)
+    g.table_melds = [m]
+    g.next_meld_id = 1
+    g, _ = apply(g, LayMelds(0, [MeldSpec(SET, [11, 12, 13, 14])]))  # go out
+    g, _ = apply(g, LayOff(0, 0, 15))  # 9C onto the 9s
+    g, _ = apply(g, UndoPlacement(0))  # undo the lay-off
+    assert any(c.id == 15 for c in g.players[0].hand)
+    assert g.players[0].has_gone_out  # go-out still stands
+    g, _ = apply(g, UndoPlacement(0))  # undo the go-out
+    assert not g.players[0].has_gone_out
+    assert sorted(c.id for c in g.players[0].hand) == [11, 12, 13, 14, 15, 16]
+    assert len(g.table_melds) == 1  # only the opponent's original meld remains

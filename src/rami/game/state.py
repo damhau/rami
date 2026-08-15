@@ -40,6 +40,23 @@ class FreeCardOffer:
 
 
 @dataclass
+class UndoRecord:
+    """Inverse of one reversible card placement in the current turn (issue #28).
+
+    Placements (laying melds, laying off, recovering a joker) are the only
+    undoable actions: they move cards between the player's hand and the table
+    without revealing hidden information. The stack is cleared when the turn
+    ends (the discard), so a completed turn can never be unwound."""
+
+    seat: int
+    new_meld_ids: list[int] = field(default_factory=list)  # melds this action created
+    meld_id: int | None = None  # meld this action modified, if any
+    prev_cards: list[Card] = field(default_factory=list)  # that meld's cards before
+    prev_gone_out: bool = False
+    prev_taken_id: int | None = None
+
+
+@dataclass
 class Event:
     type: str
     data: dict[str, Any] = field(default_factory=dict)
@@ -74,6 +91,10 @@ class GameState:
     # the top. A card that resurfaces from under the pile is never offerable
     # again (issue #26).
     discard_fresh: bool = False
+
+    # Reversible placements of the current turn, oldest first (issue #28).
+    # Cleared by the discard that ends the turn and at round boundaries.
+    turn_actions: list[UndoRecord] = field(default_factory=list)
 
     rng_seed: int = 0
     shuffle_count: int = 0

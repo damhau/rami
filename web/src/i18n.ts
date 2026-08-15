@@ -137,6 +137,8 @@ export const t = {
     addMeld: "Ajouter la combinaison",
     addShort: "Ajouter",
     discard: "Défausser",
+    undoPlacement: "Annuler la pose",
+    undoShort: "↩",
     tooFewCards: "Sélectionnez au moins 3 cartes.",
     notAMeld: "Ces cartes ne forment ni brelan ni suite.",
     chooseMeld: "Comment poser ces cartes ?",

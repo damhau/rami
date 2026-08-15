@@ -185,6 +185,39 @@ def test_free_card_passes_advance_then_expire():
     assert g.discard[-1].id == 2  # nobody claimed — the card stays on the pile
 
 
+def test_free_card_chain_skips_the_seat_that_discarded_the_card():
+    # Issue #23: seat 0 discards a card; seat 1 refuses it by drawing stock.
+    # The offer must go to seat 2 only — the discarder (seat 0) is never
+    # offered their own discard back.
+    hands = [[card(S, 5, 1), card(H, 9, 2)], [card(D, 4, 10)], [card(C, 7, 20)]]
+    g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
+    g.stock = [card(S, 3, 90), card(S, 2, 91)]
+    g.discard = [card(D, 11, 50)]
+    g, _ = apply(g, Discard(0, 2))  # seat 0 discards the 9H
+    assert g.discard_owner_seat == 0
+    g, _ = apply(g, DrawStock(1))  # seat 1 refuses the 9H
+    assert g.free_card is not None
+    assert g.free_card.pending_seats == [2]  # seat 0 excluded
+    g, _ = apply(g, PassFreeCard(2))  # seat 2 passes -> the offer expires
+    assert g.free_card is None
+    with pytest.raises(IllegalMove):
+        apply(g, ClaimFreeCard(0))  # seat 0 can never reclaim their own discard
+
+
+def test_discard_owner_resets_when_the_top_changes():
+    # Once the top card is picked up (normal draw), the previous owner tag must
+    # not leak onto the new top card.
+    hands = [[card(S, 5, 1), card(H, 9, 2)], [card(D, 4, 10), card(D, 5, 11)], [card(C, 7, 20)]]
+    g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
+    g.stock = [card(S, 3, 90)]
+    g.discard = [card(D, 11, 50)]
+    g, _ = apply(g, Discard(0, 2))  # seat 0 discards 9H -> owner 0
+    g, _ = apply(g, DrawDiscard(1))  # seat 1 takes the 9H -> new top is 50, owner unknown
+    assert g.discard_owner_seat is None
+    g, _ = apply(g, ReturnDiscard(1))  # putting it back also leaves owner unknown
+    assert g.discard_owner_seat is None
+
+
 def test_free_card_offer_closes_when_drawer_discards():
     g = three_player_state([_filler(13), _filler(13), _filler(13)], phase=Phase.AWAIT_DRAW, turn=0)
     g.stock = [card(S, 2, 1)]

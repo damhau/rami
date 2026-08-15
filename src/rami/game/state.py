@@ -67,6 +67,13 @@ class GameState:
     # unknown (dealt flip, or the top changed by a pickup/claim/return). Used to
     # keep a player's own discard out of the free-card chain (issue #23).
     discard_owner_seat: int | None = None
+    # True while the top of the discard is still inside its one free-card window
+    # (§3.7 / clarification R2: claimable only at the moment of refusal). Set when
+    # a card is discarded (or flipped at round start); spent — permanently — by
+    # the stock draw that refuses it, or by any pickup/claim/return that touches
+    # the top. A card that resurfaces from under the pile is never offerable
+    # again (issue #26).
+    discard_fresh: bool = False
 
     rng_seed: int = 0
     shuffle_count: int = 0

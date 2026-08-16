@@ -211,6 +211,7 @@ A refused face-up discard can be claimed *for free* by another player.
 | R6 | After going out | Remaining cards are shed on **later turns** via supplementary combinations, lay-offs, and triplet evolution (base rules). |
 | R7 | 40-pt minimum — joker value | A joker laid in a meld counts toward the 40 as the **value of the card it represents** (not 25). |
 | R8 | Joker in hand | A joker still in hand at round end scores a flat **25** (per the PDF). |
+| R9 | Free-card chain — what is eligible | Eligibility belongs to the **discard event**, not to the physical card. Only the card just discarded (the top) can be refused and claimed; once newer cards cover it, it stays buried even if the card above it is later taken. Discarding the same card again later is a **new event** that starts the normal sequence afresh, and taking the top only to put it back (§3.6) leaves its event untouched. |
 
 ### 4.2 Still open (low-impact, sensible defaults in place)
 

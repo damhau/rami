@@ -571,7 +571,7 @@ def next_bot_intent(state: GameState, seat: int) -> Intent | None:
     offer = state.free_card
     if offer is not None and offer.pending_seats and offer.pending_seats[0] == seat:
         top = state.discard[-1] if state.discard else None
-        if top is not None and _useful_free_card(state, p, top):
+        if top is not None and top.id == offer.card_id and _useful_free_card(state, p, top):
             return ClaimFreeCard(seat)
         return PassFreeCard(seat)
 

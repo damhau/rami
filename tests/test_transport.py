@@ -177,7 +177,7 @@ def test_bot_drawer_pauses_for_human_free_card_decision():
         phase=P.AWAIT_DISCARD,
         turn_seat=0,
         discard=[card(Suit.HEARTS, 9, 5)],
-        free_card=FreeCardOffer(pending_seats=[1], resume_seat=0),
+        free_card=FreeCardOffer(pending_seats=[1], resume_seat=0, card_id=5),
     )
     session = GameSession(code="X", min_players=2, max_players=2, seats=seats, state=state)
 

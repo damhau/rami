@@ -39,7 +39,15 @@ from .melds import (
     validate_meld,
 )
 from .scoring import hand_score
-from .state import Event, FreeCardOffer, GameState, Phase, PlayerState, UndoRecord
+from .state import (
+    DiscardPickup,
+    Event,
+    FreeCardOffer,
+    GameState,
+    Phase,
+    PlayerState,
+    UndoRecord,
+)
 
 HAND_SIZE = 13
 GO_OUT_MIN_POINTS = 40
@@ -88,6 +96,7 @@ def start_round(state: GameState) -> tuple[GameState, list[Event]]:
     s.table_melds = []
     s.next_meld_id = 0
     s.taken_from_discard_id = None
+    s.discard_pickup = None
     s.free_card = None
     s.turn_actions = []
     s.discard_owner_seat = None  # the opening flip comes from the deal, not a player
@@ -204,9 +213,10 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
     #  - 3+ players: every stock draw offers the refused card to the following seats.
     #  - 2 players: only the *opening* discard is offered — if the starter refuses it,
     #    the opponent may take it for free (no obligation to go out).
-    # Only a card still inside its one free-card window may be offered (R2 /
-    # issue #26): a resurfaced or previously refused top is dead. This stock
-    # draw is the refusal that spends the window, offer or not.
+    # Only a card still inside its free-card window may be offered (R2 / issue
+    # #26): a resurfaced top — one that newer discards were piled onto and that
+    # only reappeared because the card above it was taken — is dead (issue #38).
+    # This stock draw is the refusal that spends the window, offer or not.
     fresh = s.discard_fresh
     s.discard_fresh = False
     if s.discard and fresh and (s.num_players >= 3 or opening):
@@ -218,7 +228,11 @@ def _draw_stock(s: GameState, intent: DrawStock, events: list[Event]) -> None:
             if (seat := (intent.seat + k) % s.num_players) != s.discard_owner_seat
         ]
         if pending:
-            s.free_card = FreeCardOffer(pending_seats=pending, resume_seat=intent.seat)
+            # The offer names the refused card, so a claim can never hand out a
+            # different one should the top change under it (issue #38).
+            s.free_card = FreeCardOffer(
+                pending_seats=pending, resume_seat=intent.seat, card_id=s.discard[-1].id
+            )
             events.append(Event("free_card_offered", {"seats": list(pending)}))
 
 
@@ -228,10 +242,18 @@ def _draw_discard(s: GameState, intent: DrawDiscard, events: list[Event]) -> Non
     _require_turn(s, intent.seat)
     if not s.discard:
         raise IllegalMove("the discard pile is empty")
-    s.opening_turn = False
     card = s.discard.pop()
+    # Remember the window this pickup interrupts: if the card comes back, the
+    # pickup must leave no trace (issue #39).
+    s.discard_pickup = DiscardPickup(
+        card_id=card.id,
+        owner_seat=s.discard_owner_seat,
+        fresh=s.discard_fresh,
+        opening_turn=s.opening_turn,
+    )
+    s.opening_turn = False
     # The top changed: the new (resurfaced) top is an old card — unknown owner,
-    # and its free-card window is long spent (issue #26).
+    # and its free-card window is long spent (issues #26 / #38).
     s.discard_owner_seat = None
     s.discard_fresh = False
     s.player(intent.seat).hand.append(card)
@@ -252,12 +274,20 @@ def _return_discard(s: GameState, intent: ReturnDiscard, events: list[Event]) ->
     player = s.player(intent.seat)
     card = _take_from_hand(player, s.taken_from_discard_id)
     s.discard.append(card)
-    # The restored top was discarded by an earlier (unknown) seat, not by the
-    # returner — leave the owner unset rather than mis-attributing it. Its
-    # free-card window stays spent: a picked-up-and-returned card is never
-    # offered again (issue #26).
-    s.discard_owner_seat = None
-    s.discard_fresh = False
+    # Putting the card back undoes the pickup completely (issue #39): the card
+    # was never really taken, so it regains the discarder tag and the free-card
+    # eligibility of the discard event it came from — this player refusing it by
+    # drawing from stock is what spends that window. Anything else would make a
+    # merely handled card permanently ineligible.
+    pickup = s.discard_pickup
+    if pickup is not None and pickup.card_id == card.id:
+        s.discard_owner_seat = pickup.owner_seat
+        s.discard_fresh = pickup.fresh
+        s.opening_turn = pickup.opening_turn
+    else:  # pragma: no cover - the pickup record always matches the held card
+        s.discard_owner_seat = None
+        s.discard_fresh = False
+    s.discard_pickup = None
     s.taken_from_discard_id = None
     s.phase = Phase.AWAIT_DRAW
     events.append(Event("returned_discard", {"seat": intent.seat, "card_id": card.id}))
@@ -276,7 +306,9 @@ def _free_card_decision(s: GameState, seat: int, claim: bool, events: list[Event
         raise IllegalMove("it is not your free-card decision")
 
     if claim:
-        if not s.discard:
+        # Only the card the offer was opened on may be claimed — never whatever
+        # happens to be on top of the pile now (issue #38).
+        if not s.discard or s.discard[-1].id != offer.card_id:
             raise IllegalMove("the free card is gone")
         card = s.discard.pop()
         # The resurfaced top is an old card: unknown owner, window spent (#26).
@@ -533,13 +565,16 @@ def _discard(s: GameState, intent: Discard, events: list[Event]) -> None:
     card = _take_from_hand(player, intent.card_id)
     s.discard.append(card)
     # Remember who discarded the new top so a later free-card chain can skip
-    # them — a player is never offered their own discard back (issue #23) —
-    # and open the card's one free-card window (issue #26).
+    # them — a player is never offered their own discard back (issue #23).
+    # Every discard is a new discard event, so it opens a free-card window even
+    # for a card that already went through one earlier in the round: eligibility
+    # belongs to the event, not to the physical card (issues #26 / #39).
     s.discard_owner_seat = intent.seat
     s.discard_fresh = True
     # The turn is complete: its placements are final and can no longer be
     # undone (issue #28).
     s.turn_actions = []
+    s.discard_pickup = None
     events.append(Event("discarded", {"seat": intent.seat, "card_id": card.id}))
 
     if not player.hand:
@@ -557,6 +592,7 @@ def _end_round(s: GameState, winner_seat: int, events: list[Event]) -> None:
         p.total_score += p.round_score
         s.last_round_scores[p.seat] = p.round_score
     s.taken_from_discard_id = None
+    s.discard_pickup = None
     s.free_card = None
     s.turn_actions = []
     events.append(

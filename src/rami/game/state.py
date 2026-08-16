@@ -37,6 +37,25 @@ class FreeCardOffer:
 
     pending_seats: list[int]  # seats still to decide, in turn order
     resume_seat: int  # active player to resume once the chain resolves
+    # The one card being offered — the discard top at the moment of the refusal.
+    # Binding the offer to a card (rather than to "whatever is on top") is what
+    # keeps an older, resurfaced discard out of the chain (issue #38).
+    card_id: int
+
+
+@dataclass
+class DiscardPickup:
+    """The discard pile's free-card bookkeeping from just before its top was
+    picked up (§3.6), so that putting the card back fully undoes the pickup.
+
+    A card that is merely handled and returned was never really taken: it keeps
+    the eligibility and the discarder tag of its original discard event, and the
+    opening turn is still open (issue #39)."""
+
+    card_id: int
+    owner_seat: int | None
+    fresh: bool
+    opening_turn: bool
 
 
 @dataclass
@@ -86,11 +105,15 @@ class GameState:
     discard_owner_seat: int | None = None
     # True while the top of the discard is still inside its one free-card window
     # (§3.7 / clarification R2: claimable only at the moment of refusal). Set when
-    # a card is discarded (or flipped at round start); spent — permanently — by
-    # the stock draw that refuses it, or by any pickup/claim/return that touches
-    # the top. A card that resurfaces from under the pile is never offerable
-    # again (issue #26).
+    # a card is discarded (or flipped at round start); spent by the stock draw
+    # that refuses it, or by any pickup/claim that takes the top. A card that
+    # resurfaces from under the pile is never offerable again (issue #26) — but
+    # a *new* discard of that same card opens a new window, and a pickup that is
+    # put back restores the one it interrupted (issue #39).
     discard_fresh: bool = False
+    # Set while the current player holds a card taken from the discard; carries
+    # what to restore if they put it back (issue #39).
+    discard_pickup: DiscardPickup | None = None
 
     # Reversible placements of the current turn, oldest first (issue #28).
     # Cleared by the discard that ends the turn and at round boundaries.

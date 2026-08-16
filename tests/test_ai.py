@@ -91,7 +91,7 @@ def test_bot_claims_a_free_card_that_completes_a_meld():
     hands = [_no_meld_filler(5), [card(S, 7, 1), card(H, 7, 2)], _no_meld_filler(5)]
     g = three_player_state(hands, round_no=1, turn=0, phase=Phase.AWAIT_DISCARD)
     g.discard = [card(D, 7, 50)]  # 7♦ completes 7♠ 7♥ 7♦
-    g.free_card = FreeCardOffer(pending_seats=[1], resume_seat=0)
+    g.free_card = FreeCardOffer(pending_seats=[1], resume_seat=0, card_id=50)
     assert next_bot_intent(g, 1) == ClaimFreeCard(1)
 
 

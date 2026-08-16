@@ -220,8 +220,8 @@ def test_discard_owner_resets_when_the_top_changes():
     g, _ = apply(g, Discard(0, 2))  # seat 0 discards 9H -> owner 0
     g, _ = apply(g, DrawDiscard(1))  # seat 1 takes the 9H -> new top is 50, owner unknown
     assert g.discard_owner_seat is None
-    g, _ = apply(g, ReturnDiscard(1))  # putting it back also leaves owner unknown
-    assert g.discard_owner_seat is None
+    g, _ = apply(g, ReturnDiscard(1))  # putting it back restores seat 0's tag (issue #39)
+    assert g.discard_owner_seat == 0
 
 
 def test_free_card_offer_closes_when_drawer_discards():
@@ -248,20 +248,134 @@ def test_wrong_seat_cannot_decide_free_card():
         apply(g, ClaimFreeCard(2))  # seat 2 must wait behind seat 1
 
 
-def test_declined_free_card_is_never_offered_again():
-    # Issue #26: once a card's free-card window is spent, it is dead — even if
-    # it resurfaces. Seat 0 discards X; seat 1 picks it up, returns it, and then
-    # draws from stock: no new offer may open for X.
+def test_refused_free_card_is_not_offered_again_on_a_later_stock_draw():
+    # Issue #26: a card that was already refused stays refused. Seat 0 discards
+    # X, seat 1 refuses it (stock draw), seat 2 passes — when seat 2 later draws
+    # from stock, the same X on top must not re-enter the chain.
+    hands = [[card(S, 5, 1), card(H, 9, 2)], [card(D, 4, 10), card(D, 5, 11)], [card(C, 7, 20)]]
+    g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
+    g.stock = [card(S, 3, 90), card(S, 2, 91), card(S, 6, 92)]
+    g.discard = [card(D, 11, 50)]
+    g, _ = apply(g, Discard(0, 2))  # X = 9H, fresh
+    g, _ = apply(g, DrawStock(1))  # seat 1 refuses X -> offered to seat 2
+    g, _ = apply(g, PassFreeCard(2))
+    g, _ = apply(g, Discard(1, 10))  # seat 1 ends its turn (top is now the 4D)
+    g, _ = apply(g, DrawDiscard(2))  # seat 2 takes that 4D, exposing X again
+    g, _ = apply(g, ReturnDiscard(2))
+    g, _ = apply(g, DrawStock(2))
+    assert g.free_card is not None
+    assert g.free_card.card_id == 10  # the 4D it just put back — never the older X
+
+
+def test_returned_pickup_restores_the_free_card_window():
+    # Issue #39: taking the discard and putting it back (the §3.6 escape hatch)
+    # is not a genuine pickup — it must leave the card's discard event intact,
+    # so refusing it afterwards still offers it to the following seats.
     hands = [[card(S, 5, 1), card(H, 9, 2)], [card(D, 4, 10), card(D, 5, 11)], [card(C, 7, 20)]]
     g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
     g.stock = [card(S, 3, 90), card(S, 2, 91)]
     g.discard = [card(D, 11, 50)]
-    g, _ = apply(g, Discard(0, 2))  # X = 9H, fresh
-    g, _ = apply(g, DrawDiscard(1))  # pickup spends X's window
-    g, _ = apply(g, ReturnDiscard(1))
-    assert not g.discard_fresh
-    g, _ = apply(g, DrawStock(1))  # refusing the returned X opens nothing
-    assert g.free_card is None
+    g, _ = apply(g, Discard(0, 2))  # X = 9H, discarded by seat 0
+    g, _ = apply(g, DrawDiscard(1))  # seat 1 picks X up...
+    g, _ = apply(g, ReturnDiscard(1))  # ...and puts it back: no trace left
+    assert g.discard_fresh
+    assert g.discard_owner_seat == 0  # still seat 0's discard (issue #23)
+    g, _ = apply(g, DrawStock(1))  # *this* is seat 1's refusal
+    assert g.free_card is not None
+    assert g.free_card.card_id == 2
+    assert g.free_card.pending_seats == [2]  # the discarder (seat 0) stays out
+
+
+def test_two_player_returned_opening_card_is_still_offered():
+    # Same rule on the 2-player opening turn (§3.7): the starter who takes the
+    # face-up card but cannot go out with it puts it back — that is a refusal,
+    # so the opponent still gets it for free.
+    g = two_player_state([card(S, 5, 1), card(H, 4, 2)], _filler(13), phase=Phase.AWAIT_DRAW)
+    g.stock = [card(S, 2, 80), card(S, 3, 81)]
+    g.discard = [card(H, 9, 50)]
+    g.discard_fresh = True  # the opening flip opens its own window
+    g.opening_turn = True
+    g, _ = apply(g, DrawDiscard(0))
+    g, _ = apply(g, ReturnDiscard(0))
+    assert g.opening_turn  # the opening offer has not been used up
+    g, _ = apply(g, DrawStock(0))
+    assert g.free_card is not None
+    assert g.free_card.card_id == 50
+
+
+def test_rediscarded_card_gets_a_new_free_card_window():
+    # Issue #39: eligibility belongs to the *discard event*, not to the physical
+    # card. A card taken as a free card and discarded again later starts the
+    # normal sequence afresh.
+    hands = [
+        [card(S, 5, 1), card(H, 9, 2), card(S, 6, 3)],
+        [card(D, 4, 10), card(D, 5, 11), card(D, 6, 12)],
+        [card(C, 7, 20), card(C, 8, 21)],
+    ]
+    g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
+    g.stock = [card(S, 3, 90), card(S, 2, 91), card(S, 4, 92), card(S, 10, 93)]
+    g.discard = [card(D, 11, 50)]
+    g, _ = apply(g, Discard(0, 2))  # seat 0 discards X = 9H
+    g, _ = apply(g, DrawStock(1))  # seat 1 refuses it
+    g, _ = apply(g, ClaimFreeCard(2))  # seat 2 takes X as a free card
+    assert any(c.id == 2 for c in g.players[2].hand)
+    g, _ = apply(g, Discard(1, 10))
+    g, _ = apply(g, DrawStock(2))
+    g, _ = apply(g, PassFreeCard(0))
+    g, _ = apply(g, Discard(2, 2))  # seat 2 discards X again: a new discard event
+    assert g.discard_fresh
+    assert g.discard_owner_seat == 2
+    # Seat 0 may take X under the normal §3.6 obligation...
+    taken, _ = apply(g, DrawDiscard(0))
+    assert taken.taken_from_discard_id == 2
+    # ...and if it refuses instead, X is offered on to seat 1.
+    g, _ = apply(g, DrawStock(0))
+    assert g.free_card is not None
+    assert g.free_card.card_id == 2
+    assert g.free_card.pending_seats == [1]
+
+
+def test_only_the_offered_card_can_be_claimed():
+    # Issue #38: the offer names one card. Whatever else surfaces on the pile,
+    # a claim can only ever hand out that card.
+    hands = [[card(S, 5, 1), card(H, 9, 2)], [card(D, 4, 10)], [card(C, 7, 20)]]
+    g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
+    g.stock = [card(S, 3, 90), card(S, 2, 91)]
+    g.discard = [card(D, 11, 50)]
+    g, _ = apply(g, Discard(0, 2))
+    g, _ = apply(g, DrawStock(1))
+    assert g.free_card is not None
+    assert g.free_card.card_id == 2
+    g.discard.append(card(S, 8, 60))  # something else lands on top
+    with pytest.raises(IllegalMove):
+        apply(g, ClaimFreeCard(2))
+
+
+def test_old_discard_never_resurfaces_as_a_free_card():
+    # Issue #38: X is discarded and left in the pile, Y is discarded on top of
+    # it and then claimed — X must stay buried, not be offered again.
+    hands = [
+        [card(S, 5, 1), card(H, 9, 2), card(S, 6, 3)],
+        [card(D, 4, 10), card(D, 5, 11), card(D, 6, 12)],
+        [card(C, 7, 20), card(C, 8, 21), card(C, 9, 22)],
+    ]
+    g = three_player_state(hands, phase=Phase.AWAIT_DISCARD, turn=0)
+    g.stock = [card(S, 3, 90), card(S, 2, 91), card(S, 4, 92), card(S, 10, 93)]
+    g.discard = [card(D, 11, 50)]
+    g, _ = apply(g, Discard(0, 2))  # X = 9H
+    g, _ = apply(g, DrawStock(1))  # seat 1 refuses X...
+    g, _ = apply(g, PassFreeCard(2))  # ...and seat 2 declines it: X is settled
+    g, _ = apply(g, Discard(1, 10))  # Y = 4D lands on top of X
+    g, _ = apply(g, DrawStock(2))  # seat 2 refuses Y -> offered to seat 0
+    assert g.free_card is not None
+    assert g.free_card.card_id == 10
+    g, _ = apply(g, ClaimFreeCard(0))  # seat 0 takes Y, exposing X again
+    assert g.discard[-1].id == 2
+    assert g.free_card is None  # taking Y does not chain on to the older X
+    g, _ = apply(g, Discard(2, 20))  # seat 2 ends its turn (Z covers X)
+    g, _ = apply(g, DrawStock(0))  # seat 0 refuses Z
+    assert g.free_card is not None
+    assert g.free_card.card_id == 20  # Z — never the long-buried X
 
 
 def test_resurfaced_old_top_is_not_offered_on_stock_draw():

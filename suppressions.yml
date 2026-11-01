@@ -11,6 +11,29 @@ suppressions:
   expires: '2026-12-01'
   created: '2026-11-01'
   source: triage
+- id: b57456279fd2
+  reason: 'secubot triage: false positive (high confidence). According to the advisory,
+    the vulnerability is in pydantic-settings'' `NestedSecretsSettingsSource`. That
+    source is only active when `secrets_dir` is configured and `secrets_nested_subdir=True`.
+    Only one file in the repository uses pydantic-settings, `src/rami/core/config.py`.
+    Its `Settings` class sets only `env_prefix`, `env_file` and `extra` in `SettingsConfigDict`
+    (line 21). It sets no `secrets'
+  expires: '2026-12-01'
+  created: '2026-11-01'
+  source: triage
+- id: dc22c3d44f74
+  reason: 'secubot triage: false positive (high confidence). The advisory concerns
+    a CA trust-store problem: certifi bundles an emSign root whose intermediates had
+    compromised keys, so a client that trusts the bundle and makes outbound TLS connections
+    could be intercepted by an on-path attacker. That needs (a) certifi installed
+    in production and (b) the app making outbound TLS connections that use the certifi
+    bundle. Neither holds here.
+
+
+    (a) In uv.lock, cer'
+  expires: '2026-12-01'
+  created: '2026-11-01'
+  source: triage
 - id: e35183ac9bbe
   reason: 'secubot triage: false positive (high confidence). starlette 1.2.1 is installed
     as a transitive dependency of fastapi 0.136.3 (uv.lock:321-327, 957-958). The

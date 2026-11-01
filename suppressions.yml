@@ -1,0 +1,26 @@
+# Managed by secubot (false positives agreed by triage + adversarial review).
+# Entries expire and are then re-triaged. Delete an entry to force re-triage now.
+suppressions:
+- id: 8c8b5c85f375
+  reason: 'secubot triage: false positive (high confidence). The flagged line is in
+    the Vite config''s `server.proxy` block (web/vite.config.ts:12-18). That block
+    only applies when you run the local dev server (`vite dev`). It does not end up
+    in the production build. It forwards `/ws` from the dev server to a backend on
+    the developer''s own machine (default `localhost:8000`, lines 5-9), so the plain
+    `ws://` hop only carries local traffic. The browser client d'
+  expires: '2026-12-01'
+  created: '2026-11-01'
+  source: triage
+- id: e35183ac9bbe
+  reason: 'secubot triage: false positive (high confidence). starlette 1.2.1 is installed
+    as a transitive dependency of fastapi 0.136.3 (uv.lock:321-327, 957-958). The
+    production app is a FastAPI service (src/rami/main.py). Neither vulnerable code
+    path is used in production.
+
+
+    CVE-2026-54283 (urlencoded form limits ignored): this only matters if form data
+    gets parsed, through `request.form()` or FastAPI `Form()`/`File()` parameters.
+    I grepped src/ and found '
+  expires: '2026-12-01'
+  created: '2026-11-01'
+  source: triage

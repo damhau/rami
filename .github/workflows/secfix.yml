@@ -1,0 +1,17 @@
+name: secfix
+on:
+  workflow_dispatch:
+  # schedule: [{ cron: "23 3 * * *" }] # enable once the test runs look right
+permissions: {}
+concurrency: { group: secfix, cancel-in-progress: false }
+jobs:
+  secfix:
+    uses: damhau/secubot/.github/workflows/secfix.yml@main
+    permissions: { contents: write, pull-requests: write, issues: write, security-events: write, actions: read }
+    with:
+      secubot-repository: damhau/secubot
+      secubot-ref: main # no release tag yet; pin a tag or SHA later
+      dry-run: true # first run: scan, triage, fix; publish nothing
+      egress-policy: audit # record outbound connections instead of blocking
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

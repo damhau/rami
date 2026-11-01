@@ -1,0 +1,26 @@
+# secubot configuration (https://github.com/damhau/secubot/blob/main/docs/configuration.md)
+version: 1
+
+paths:
+  skip:
+    - .git/
+    - .venv/
+    - node_modules/
+    - "**/testdata/"
+    - web/dist/
+    - mockups/
+    - docs/
+
+commands:
+  setup: uv sync --frozen
+  test: uv run pytest -q
+  timeout_minutes: 15
+
+policy:
+  max_triage: 4
+  max_prs: 2
+  dependencies: all # no Dependabot/Renovate on this repo, so let secubot take bumps too
+
+models:
+  triage_budget_usd: 1.5
+  fix_budget_usd: 5

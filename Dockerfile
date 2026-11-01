@@ -37,7 +37,15 @@ ENV PATH="/app/.venv/bin:$PATH" \
     RAMI_LOG_LEVEL=INFO \
     RAMI_STATIC_DIR=/app/web/dist
 
+# Run as an unprivileged user; /app stays root-owned and is only read at runtime.
+RUN groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
+USER app:app
+
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
 
 # Single process: the table/game state is held in memory, so do NOT scale to
 # multiple workers (each would have its own, divergent state).

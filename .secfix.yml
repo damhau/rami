@@ -2,6 +2,7 @@
 version: 1
 
 paths:
+  ignore_protected: true
   skip:
     - .git/
     - .venv/

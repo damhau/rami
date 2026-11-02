@@ -4,17 +4,27 @@ updates:
     directory: /
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
-    groups: { python: { patterns: ["*"], update-types: [minor, patch] } }
+    groups:
+      python-security: { applies-to: security-updates, patterns: ["*"] }
+      python: { patterns: ["*"], update-types: [minor, patch] }
+      python-major: { patterns: ["*"], update-types: [major] }
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
-    groups: { web: { patterns: ["*"], update-types: [minor, patch] } }
+    groups:
+      web-security: { applies-to: security-updates, patterns: ["*"] }
+      web: { patterns: ["*"], update-types: [minor, patch] }
+      web-major: { patterns: ["*"], update-types: [major] }
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
+    groups:
+      docker: { patterns: ["*"] }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
+    groups:
+      actions: { patterns: ["*"] }

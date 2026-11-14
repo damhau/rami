@@ -6,11 +6,10 @@ permissions: {}
 concurrency: { group: secfix, cancel-in-progress: false }
 jobs:
   secfix:
-    uses: damhau/secubot/.github/workflows/secfix.yml@main
+    uses: damhau/secubot/.github/workflows/secfix.yml@2893ee6178e55c57919e1f6b3666615e351dc3f9 # v1.2.1
     permissions: { contents: write, pull-requests: write, issues: write, security-events: write, actions: read }
     with:
       secubot-repository: damhau/secubot
-      secubot-ref: main # no release tag yet; pin a tag or SHA later
       egress-policy: audit # record outbound connections instead of blocking
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

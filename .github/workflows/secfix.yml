@@ -6,7 +6,7 @@ permissions: {}
 concurrency: { group: secfix, cancel-in-progress: false }
 jobs:
   secfix:
-    uses: damhau/secubot/.github/workflows/secfix.yml@2893ee6178e55c57919e1f6b3666615e351dc3f9 # v1.2.1
+    uses: damhau/secubot/.github/workflows/secfix.yml@966564e9c1a9b6e03f3309de38053ada35e8ee52 # v1.2.2
     permissions: { contents: write, pull-requests: write, issues: write, security-events: write, actions: read }
     with:
       secubot-repository: damhau/secubot
